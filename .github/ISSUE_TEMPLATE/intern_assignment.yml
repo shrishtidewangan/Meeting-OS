@@ -1,0 +1,25 @@
+name: Intern assignment
+description: Track one independent MeetingOS prototype assignment
+title: "Intern Assignment: <Name> - Full MeetingOS Prototype"
+labels: ["intern-assignment", "evaluation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Create your own branch from `main` and build the complete MeetingOS prototype independently.
+  - type: input
+    id: branch
+    attributes:
+      label: Branch naming pattern
+      value: "intern/<your-name>/meetingos-prototype"
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Required setup
+      options:
+        - label: Read docs/assignment/INTERN_ASSIGNMENT.md
+        - label: Read docs/assignment/PROJECT_SPEC.md
+        - label: Read docs/assignment/OPENROUTER_LANGGRAPH_GUIDE.md
+        - label: Open draft PR by end of Day 1
+        - label: Keep WORK_LOG.md updated
+

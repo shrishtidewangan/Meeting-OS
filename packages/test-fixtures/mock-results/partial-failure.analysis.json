@@ -1,0 +1,41 @@
+{
+  "analysisRunId": "fixture-run-partial-failure",
+  "meetingId": "fixture-meeting-project",
+  "summary": {
+    "executiveSummary": "Partial fixture: summary succeeded while one specialist failed.",
+    "themes": ["Partial failure"],
+    "outcome": "PARTIAL_OUTCOME"
+  },
+  "decisions": [],
+  "actionItems": [],
+  "risksAndBlockers": [],
+  "openQuestions": [],
+  "followUp": {
+    "subject": "",
+    "body": ""
+  },
+  "nextAgenda": {
+    "title": "",
+    "objectives": [],
+    "items": [],
+    "requiredPreparation": [],
+    "suggestedAttendees": [],
+    "suggestedDurationMinutes": 0
+  },
+  "warnings": [
+    {
+      "code": "ACTION_AGENT_FAILED",
+      "message": "Action Agent returned malformed output twice.",
+      "nodeName": "actionAgent"
+    }
+  ],
+  "agentRuns": [
+    {
+      "nodeName": "actionAgent",
+      "status": "FAILED",
+      "retryCount": 1
+    }
+  ],
+  "generatedAt": "2026-07-28T00:00:00.000Z"
+}
+

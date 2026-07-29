@@ -1,0 +1,41 @@
+{
+  "analysisRunId": "fixture-run-success",
+  "meetingId": "fixture-meeting-project",
+  "summary": {
+    "executiveSummary": "The team narrowed the MVP scope to transcript and text upload workflows, confirmed the review workspace must distinguish inferred values, and identified model availability and validation risks.",
+    "themes": ["MVP scope", "Human review", "Model reliability"],
+    "outcome": "CLEAR_OUTCOME"
+  },
+  "decisions": [
+    {
+      "id": "decision-1",
+      "statement": "The MVP will support pasted transcripts and text or markdown uploads only.",
+      "owner": null,
+      "evidence": {
+        "excerpt": "Decision one: the MVP will support pasted transcripts and text or markdown uploads only. No live audio.",
+        "sourceType": "TRANSCRIPT"
+      },
+      "confidence": 0.94,
+      "inferred": false
+    }
+  ],
+  "actionItems": [],
+  "risksAndBlockers": [],
+  "openQuestions": [],
+  "followUp": {
+    "subject": "MeetingOS MVP follow-up",
+    "body": "TODO: assignee should generate this from reviewed data."
+  },
+  "nextAgenda": {
+    "title": "MeetingOS next steps",
+    "objectives": [],
+    "items": [],
+    "requiredPreparation": [],
+    "suggestedAttendees": [],
+    "suggestedDurationMinutes": 30
+  },
+  "warnings": [],
+  "agentRuns": [],
+  "generatedAt": "2026-07-28T00:00:00.000Z"
+}
+

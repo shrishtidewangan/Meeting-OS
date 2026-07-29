@@ -1,0 +1,18 @@
+name: Evaluation blocker
+description: Report a blocker that may affect evaluation
+title: "Evaluation blocker: "
+labels: ["blocked", "needs-evaluator"]
+body:
+  - type: textarea
+    id: blocker
+    attributes:
+      label: Blocker
+      description: What is blocking progress?
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What you tried
+      description: List commands, approaches, and current evidence.
+

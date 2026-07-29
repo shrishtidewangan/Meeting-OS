@@ -1,0 +1,5 @@
+{
+  "scenario": "malformed-output",
+  "message": "Use this fixture to simulate invalid JSON or schema-invalid model output."
+}
+

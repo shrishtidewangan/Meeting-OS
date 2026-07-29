@@ -1,0 +1,27 @@
+{
+  "name": "meetingos-starter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter web --filter api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:e2e": "echo \"TODO: assignee implements e2e tests\"",
+    "test:agents": "echo \"TODO: assignee implements LangGraph tests\"",
+    "seed": "echo \"TODO: assignee implements fixture seeding\"",
+    "eval:live": "echo \"TODO: assignee implements OpenRouter evaluation\"",
+    "verify:scaffold": "powershell -ExecutionPolicy Bypass -File scripts/verify-scaffold.ps1",
+    "check:no-secrets": "powershell -ExecutionPolicy Bypass -File scripts/check-no-secrets.ps1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

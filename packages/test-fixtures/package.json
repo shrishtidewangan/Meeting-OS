@@ -1,0 +1,13 @@
+{
+  "name": "@meetingos/test-fixtures",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "echo \"fixtures only\"",
+    "typecheck": "echo \"fixtures only\"",
+    "lint": "echo \"fixtures only\"",
+    "test": "echo \"fixtures only\""
+  }
+}
+

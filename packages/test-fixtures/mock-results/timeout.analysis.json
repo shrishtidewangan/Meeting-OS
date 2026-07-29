@@ -1,0 +1,5 @@
+{
+  "scenario": "timeout",
+  "message": "Use this fixture to simulate provider timeout behavior in mock mode."
+}
+
