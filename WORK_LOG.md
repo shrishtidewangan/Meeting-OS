@@ -4,9 +4,9 @@ Use this file to record your implementation decisions, blockers, tests, and AI-a
 
 ## Setup Notes
 
-- Starter commit SHA:
-- Branch name:
-- Local setup result:
+- Starter commit SHA: 75692e8
+- Branch name: intern/shrishti-dewangan/meetingos-prototype
+- Local setup result: Cloned repo, installed dependencies via pnpm. Verified scaffold successfully (typecheck, tests, and lint all passing). Configured local MongoDB (mongodb://localhost:27017/meetingos) and confirmed AI_MODE=mock. Frontend running on localhost:5173 and backend on localhost:3001, health check returns {"ok":true}
 
 ## Daily Notes
 
