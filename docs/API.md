@@ -223,6 +223,88 @@ Error responses:
 - 400 UPLOAD_FAILED — other upload error
 
 - Analysis endpoints.
+
+## Analysis Endpoints
+
+All analysis endpoints require authentication:
+  Authorization: Bearer <token>
+
+Currently implemented in **mock mode only** — these run against static
+fixture data (packages/test-fixtures/mock-results/), not a real LangGraph
+workflow or OpenRouter. Live analysis is a later step.
+
+### POST /api/meetings/:meetingId/analysis
+Starts a mock analysis run for an owned meeting.
+
+Request body (optional):
+{ "scenario": "success" }
+
+scenario must be one of: success, partial-failure, timeout, malformed-output
+Defaults to the MOCK_AI_SCENARIO env var (default "success") if omitted.
+
+Success response (201):
+{
+  "ok": true,
+  "analysisRun": {
+    "_id": "...",
+    "ownerId": "...",
+    "meetingId": "...",
+    "threadId": "...",
+    "status": "NEEDS_REVIEW",
+    "requestedModel": "mock",
+    "actualModel": "mock",
+    "warnings": [],
+    "sanitizedErrors": [],
+    "retryCount": 0,
+    "result": {
+      "analysisRunId": "...",
+      "meetingId": "...",
+      "summary": { "executiveSummary": "...", "themes": ["..."], "outcome": "CLEAR_OUTCOME" },
+      "decisions": [ { "id": "...", "statement": "...", "owner": null, "evidence": {...}, "confidence": 0.94, "inferred": false } ],
+      "actionItems": [],
+      "risksAndBlockers": [],
+      "openQuestions": [],
+      "followUp": { "subject": "...", "body": "..." },
+      "nextAgenda": { "title": "...", "objectives": [], "items": [], "requiredPreparation": [], "suggestedAttendees": [], "suggestedDurationMinutes": 30 },
+      "warnings": [],
+      "agentRuns": [],
+      "generatedAt": "..."
+    },
+    "startedAt": "...",
+    "completedAt": "..."
+  }
+}
+
+Scenario -> resulting status:
+  success           -> NEEDS_REVIEW
+  partial-failure   -> PARTIAL_FAILURE
+  malformed-output   -> PARTIAL_FAILURE
+  timeout           -> FAILED
+
+The meeting's own `status` and `latestGeneratedDraft` are updated to match.
+
+Error responses:
+- 404 ANALYSIS_NOT_FOUND — meetingId doesn't exist
+- 403 ANALYSIS_FORBIDDEN — meetingId exists but belongs to another user
+- 400 ANALYSIS_REQUEST_INVALID — unknown scenario name
+
+### GET /api/meetings/:meetingId/analysis/:analysisRunId
+Fetches one analysis run, scoped to both the meeting and the owner.
+
+Success response (200):
+{ "ok": true, "analysisRun": { ...same shape as above } }
+
+Error responses: same 404/403 as above, using code ANALYSIS_NOT_FOUND /
+ANALYSIS_FORBIDDEN.
+
+### GET /api/analysis/:analysisRunId
+Same lookup as above, without needing the meetingId — a top-level
+convenience route. Scoped to the owner only.
+
+Success response (200):
+{ "ok": true, "analysisRun": { ... } }
+
+
 - Resume and retry endpoints.
 - Metrics endpoints.
 - Request and response examples.
