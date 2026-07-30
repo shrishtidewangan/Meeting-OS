@@ -19,6 +19,7 @@ import type { Request, Response, NextFunction } from "express";
 import multer, { MulterError } from "multer";
 import path from "node:path";
 import { meetingController } from "../controllers/meeting.controller";
+import { analysisController } from "../controllers/analysis.controller";
 import { createNotImplementedHandler } from "../controllers/notImplemented";
 import { requireAuth } from "../middleware/auth.middleware";
 
@@ -40,8 +41,6 @@ const upload = multer({
   },
 });
 
-// Wraps multer so upload errors return { ok: false, error: {...} }
-// instead of falling through to the generic error middleware.
 function handleTranscriptUpload(req: Request, res: Response, next: NextFunction) {
   upload.single("file")(req, res, (err: unknown) => {
     if (!err) return next();
@@ -72,12 +71,11 @@ meetingRouter.patch("/:meetingId", meetingController.update);
 meetingRouter.delete("/:meetingId", meetingController.remove);
 meetingRouter.post("/:meetingId/transcript", handleTranscriptUpload, meetingController.saveTranscript);
 
-// Analysis-related endpoints — left as stubs, implemented in a later step
-meetingRouter.post("/:meetingId/analysis", createNotImplementedHandler("start analysis"));
-meetingRouter.get(
-  "/:meetingId/analysis/:analysisRunId",
-  createNotImplementedHandler("get analysis status")
-);
+// Mock analysis endpoints — now implemented (real LangGraph is a later step)
+meetingRouter.post("/:meetingId/analysis", analysisController.start);
+meetingRouter.get("/:meetingId/analysis/:analysisRunId", analysisController.getForMeeting);
+
+// Resume/retry require the LangGraph human-review interrupt — still out of scope
 meetingRouter.post(
   "/:meetingId/analysis/:analysisRunId/resume",
   createNotImplementedHandler("resume analysis")

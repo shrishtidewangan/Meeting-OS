@@ -21,6 +21,8 @@ export type AppEnv = {
   MONGODB_URI: string;
   JWT_SECRET: string;
   JWT_ISSUER: string;
+  AI_MODE: "mock" | "live";
+  MOCK_AI_SCENARIO: string;
 };
 
 function required(name: string): string {
@@ -38,6 +40,7 @@ export function getEnv(): AppEnv {
     MONGODB_URI: required("MONGODB_URI"),
     JWT_SECRET: required("JWT_SECRET"),
     JWT_ISSUER: required("JWT_ISSUER"),
+    AI_MODE: (process.env.AI_MODE as "mock" | "live") ?? "mock",
+    MOCK_AI_SCENARIO: process.env.MOCK_AI_SCENARIO ?? "success",
   };
 }
-
