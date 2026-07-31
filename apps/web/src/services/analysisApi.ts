@@ -21,6 +21,23 @@ export type AnalysisRunStatus =
   | "FINALIZED"
   | "FAILED";
 
+// Before human review/resume, followUp and nextAgenda genuinely don't
+// exist yet — this type reflects that instead of falsely promising they're
+// always present (which the plain MeetingAnalysis contract type assumes).
+type PartialMeetingAnalysis = Omit<MeetingAnalysis, "followUp" | "nextAgenda"> & {
+  followUp?: MeetingAnalysis["followUp"];
+  nextAgenda?: MeetingAnalysis["nextAgenda"];
+};
+
+export type AgentRunSummary = {
+  nodeName: string;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "FALLBACK";
+  durationMs?: number;
+  requestedModel?: string;
+  actualModel?: string;
+  retryCount: number;
+};
+
 export type AnalysisRun = {
   _id: string;
   ownerId: string;
@@ -30,7 +47,8 @@ export type AnalysisRun = {
   requestedModel: string;
   actualModel?: string;
   warnings: { code: string; message: string; nodeName?: string }[];
-  result?: MeetingAnalysis;
+  agentRuns?: AgentRunSummary[];
+  result?: PartialMeetingAnalysis;
   startedAt: string;
   completedAt?: string;
 };
@@ -52,8 +70,19 @@ export async function getAnalysisStatus(meetingId: string, analysisRunId: string
   return res.analysisRun;
 }
 
-// Not implemented on the backend yet — this is the LangGraph human-review
-// resume mechanism (spec section 12), which is Day 2-3 scope.
-export async function resumeAnalysis() {
-  throw new Error("Resume is not implemented yet — this requires the LangGraph interrupt/resume mechanism (a later step).");
+export async function resumeAnalysis(
+  meetingId: string,
+  analysisRunId: string,
+  reviewedRecord: {
+    decisions: MeetingAnalysis["decisions"];
+    actionItems: MeetingAnalysis["actionItems"];
+    risksAndBlockers: MeetingAnalysis["risksAndBlockers"];
+    openQuestions: MeetingAnalysis["openQuestions"];
+  }
+) {
+  const res = await apiClient.post<{ ok: true; analysisRun: AnalysisRun }>(
+    `/api/meetings/${meetingId}/analysis/${analysisRunId}/resume`,
+    { reviewedRecord }
+  );
+  return res.analysisRun;
 }

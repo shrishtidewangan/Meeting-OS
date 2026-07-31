@@ -26,6 +26,7 @@ export interface IAnalysisRun extends Document {
   requestedModel: string;
   actualModel?: string;
   warnings: { code: string; message: string; nodeName?: string }[];
+  agentRuns: { nodeName: string; status: string; durationMs?: number; requestedModel?: string; actualModel?: string; promptTokens?: number; completionTokens?: number; reasoningTokens?: number; retryCount: number }[];
   sanitizedErrors: string[];
   retryCount: number;
   result?: MeetingAnalysis;
@@ -44,6 +45,21 @@ const warningSchema = new Schema(
   { _id: false }
 );
 
+const agentRunSchema = new Schema(
+  {
+    nodeName: { type: String, required: true },
+    status: { type: String, enum: ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "FALLBACK"], required: true },
+    durationMs: { type: Number },
+    requestedModel: { type: String },
+    actualModel: { type: String },
+    promptTokens: { type: Number },
+    completionTokens: { type: Number },
+    reasoningTokens: { type: Number },
+    retryCount: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
 const analysisRunSchema = new Schema<IAnalysisRun>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -57,6 +73,7 @@ const analysisRunSchema = new Schema<IAnalysisRun>(
     requestedModel: { type: String, required: true },
     actualModel: { type: String },
     warnings: { type: [warningSchema], default: [] },
+    agentRuns: { type: [agentRunSchema], default: [] },
     sanitizedErrors: { type: [String], default: [] },
     retryCount: { type: Number, default: 0 },
     result: { type: Schema.Types.Mixed },

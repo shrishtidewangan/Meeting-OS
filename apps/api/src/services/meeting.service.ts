@@ -5,7 +5,9 @@
 // }
 
 import mongoose from "mongoose";
-import { Meeting } from "../models/meeting.model";
+import { MeetingRepository } from "../repositories/meeting.repository";
+
+const meetingRepository = new MeetingRepository();
 
 // Converts a Mongoose ValidationError into a single clear message
 function toReadableError(err: unknown): Error {
@@ -73,7 +75,7 @@ async function findOwnedOrThrow(meetingId: string, ownerId: string) {
     throw new Error("Meeting not found");
   }
 
-  const meeting = await Meeting.findById(meetingId);
+  const meeting = await meetingRepository.findById(meetingId);
   if (!meeting) {
     throw new Error("Meeting not found");
   }
@@ -90,15 +92,14 @@ export class MeetingService {
     validateMeetingInput(input);
 
     try {
-      const meeting = await Meeting.create({ ...input, ownerId });
-      return meeting;
+      return await meetingRepository.create({ ...input, ownerId });
     } catch (err) {
       throw toReadableError(err);
     }
   }
 
   async listMeetings(ownerId: string) {
-    return Meeting.find({ ownerId }).sort({ createdAt: -1 });
+    return meetingRepository.findAllByOwner(ownerId);
   }
 
   async getMeeting(ownerId: string, meetingId: string) {

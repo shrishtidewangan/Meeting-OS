@@ -8,9 +8,6 @@ Use this file to record your implementation decisions, blockers, tests, and AI-a
 - Branch name: intern/shrishti-dewangan/meetingos-prototype
 - Local setup result: Cloned repo, installed dependencies via pnpm. Verified scaffold successfully (typecheck, tests, and lint all passing). Configured local MongoDB (mongodb://localhost:27017/meetingos) and confirmed AI_MODE=mock. Frontend running on localhost:5173 and backend on localhost:3001, health check returns {"ok":true}
 
-## Daily Notes
-
-### Day 1
 
 ## Daily Notes
 
@@ -49,14 +46,117 @@ Use this file to record your implementation decisions, blockers, tests, and AI-a
 ### Day 2
 
 - What I implemented:
+  - Zod contracts for every agent output slice (summary, decision, action,
+    risk, follow-up, planning) plus the full MeetingAnalysis contract and
+    a meeting-input schema, all in a shared @meetingos/validation package
+  - Real LangGraph state (Annotation.Root) with concatenating reducers for
+    fields multiple parallel nodes write to
+  - All six agent nodes (Summary, Decision, Action, Risk, Follow-Up,
+    Planning), each calling a MeetingModelClient interface and validating
+    its own output slice with Zod before returning
+  - validateInput and prepareContext as real graph stages, plus
+    validateCoreOutputs and aggregateCoreDraft (the latter actually
+    assembles and Zod-validates a coreDraft object, not a no-op)
+  - The full StateGraph: parallel fan-out for the four core agents,
+    fan-in, human-review interrupt, parallel fan-out again for
+    Follow-Up/Planning after review
+  - MockMeetingModelClient (deterministic, no live calls) and
+    OpenRouterMeetingModelClient (real ChatOpenRouter integration with
+    retry-on-validation-feedback)
+  - Graph contract tests covering parallel execution, input validation,
+    and — critically — a real resume test using Command({resume})
+
 - What blocked me:
-- What I tested:
+  - Repeatedly lost work because I pasted new file content into the wrong
+    existing file instead of creating new ones, most seriously overwriting
+    packages/contracts/src/{meeting,api,analysis}.ts with Zod schema
+    content meant for a different package. Had to restore all three from
+    scratch.
+  - The exact runtime shape LangGraph returns when a graph pauses at
+    interrupt() wasn't something I could verify from documentation alone —
+    had to build a debug endpoint and inspect the real response before I
+    could trust the __interrupt__/resume mechanics
+  - @langchain/openrouter's actual TypeScript types didn't match what
+    online docs (likely Python-package docs) described — ChatOpenRouter
+    has no top-level `reasoning` constructor field; had to read the
+    installed package's own .d.ts file to find the real answer
+    (modelKwargs, an escape hatch for raw API body params)
+  - withStructuredOutput() silently returns ONLY the parsed data with no
+    token/model metadata unless you pass { includeRaw: true } — this
+    wasn't obvious and required a live test call to discover
+
+- What tested:
+  - pnpm --filter api test — 3/3 graph tests passing (parallel execution,
+    short-transcript rejection, full pause+resume with Command)
+  - A live debug script confirming real OpenRouter token usage
+    (promptTokens/completionTokens/reasoningTokens) and actualModel
+    extraction against an actual API response, not assumed field names
+  - Full browser walkthrough: create meeting -> run mock analysis via UI
+    -> Analysis Progress page showing real per-node SUCCEEDED status with
+    durations -> Review Workspace rendering real graph output across all
+    8 tabs, including the graceful "not generated yet" state for
+    Follow-Up/Next Agenda before resume
 
 ### Day 3
 
-- What I implemented:
+- What implemented:
+  - Real analysis resume endpoint (POST .../analysis/:analysisRunId/resume),
+    fixing an architectural bug along the way: startGraphAnalysis was
+    creating a brand-new graph (and thus a fresh, empty MemorySaver) on
+    every call, which would have made resume permanently unable to find
+    any paused checkpoint. Fixed by using one shared, module-level graph
+    instance for the whole server process.
+  - finalizeRecordNode now builds and Zod-validates the actual final
+    MeetingAnalysis record, using state.reviewedRecord (the user's edits)
+    with precedence over the raw AI extraction — not the original output
+  - Editable Review Workspace UI: users can edit every field on decisions,
+    action items, risks/blockers, and open questions, add/remove
+    decisions and action items, and editing an inferred owner/date clears
+    its INFERRED tag. "Confirm & Resume" calls the real resume endpoint.
+  - Retry-with-validation-feedback: OpenRouterMeetingModelClient now feeds
+    the actual Zod error message back into the retry prompt, not just a
+    blind retry
+  - Analysis-run metrics endpoint (GET /api/metrics/analysis-runs):
+    aggregate counts by status/model, retry/warning totals, average
+    duration, and a sanitized recent-runs list — also fixed a second
+    missing-auth bug on this route (same class of bug as the earlier
+    /api/analysis/:id issue)
+  - Sanitized structured logging (logInfo) wired into all six graph
+    nodes, the analysis service, and the OpenRouter client
+  - Live OpenRouter evaluation: ran the real project-meeting fixture
+    twice through openrouter/free and once through a specific
+    reasoning-capable free model (nvidia/nemotron-3-ultra-550b-a55b:free),
+    verified every specific quality claim (owner attributions, dates)
+    against the actual fixture transcript rather than assuming
+
 - What blocked me:
-- What I tested:
+  - The single biggest defect I caught in my own work: I initially wrote
+    an OpenRouter evaluation claiming the reasoning model hallucinated an
+    owner ("Jordan") on a blocker. When I actually went back and checked
+    the fixture transcript, Jordan is the literal speaker of that line —
+    the attribution was correct, and I had to rewrite that section of the
+    evaluation rather than let an unverified claim stand
+  - actionAgent times out (hits the full 30s limit) in 3 of 4 live
+    evaluation runs, for both models — this is a real, still-open
+    reliability problem, not something I've fixed yet
+  - Token usage (promptTokens/completionTokens) only came back populated
+    for NVIDIA Nemotron-family models during live testing; other free
+    providers (Cohere, Ling) returned successful responses with no usage
+    metadata at all — a provider-side inconsistency, not a bug in my code
+
+- What tested:
+  - Full resume flow tested twice: once via PowerShell/API directly
+    (confirming followUp/nextAgenda literally do not exist until after
+    resume), and once through the actual browser UI end-to-end — start
+    analysis, edit a decision's owner in the Review Workspace, click
+    Confirm & Resume, watch it auto-switch to the Follow-Up tab with real
+    generated content and status FINALIZED
+  - Metrics endpoint tested against 14 real accumulated analysis runs
+    from the session, confirming correct byStatus/byRequestedModel
+    aggregation and a real 401 when called with no token
+  - Sanitized logging confirmed by actually reading real console output
+    from a live analysis run — verified no transcript, prompt, or API key
+    text appeared anywhere in the log lines
 
 ### Day 4
 

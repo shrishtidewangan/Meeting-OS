@@ -2,7 +2,6 @@ export type ApiSuccess<T> = {
   ok: true;
   data: T;
 };
-
 export type ApiError = {
   ok: false;
   error: {
@@ -11,6 +10,5 @@ export type ApiError = {
     details?: unknown;
   };
 };
-
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 

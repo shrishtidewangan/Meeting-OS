@@ -305,8 +305,124 @@ Success response (200):
 { "ok": true, "analysisRun": { ... } }
 
 
-- Resume and retry endpoints.
-- Metrics endpoints.
+## Resume And Retry Endpoints
+
+### POST /api/meetings/:meetingId/analysis/:analysisRunId/resume
+Resumes a paused analysis run with the user's reviewed edits, running the
+Follow-Up and Planning agents and finalizing the record. Requires
+authentication and ownership of both the meeting and the run.
+
+Request body:
+{
+  "reviewedRecord": {
+    "decisions": [ /* array of Decision, possibly edited/added/removed by the user */ ],
+    "actionItems": [ /* array of ActionItem, possibly edited/added/removed */ ],
+    "risksAndBlockers": [ /* array of RiskOrBlocker, possibly edited */ ],
+    "openQuestions": [ /* array of OpenQuestion, possibly edited */ ]
+  }
+}
+
+Preconditions:
+- The run must currently have status NEEDS_REVIEW or PARTIAL_FAILURE.
+  Attempting to resume a run in any other status (e.g. already FINALIZED,
+  or still RUNNING) returns 400.
+- reviewedRecord is validated against the same schema shape used for the
+  core draft — malformed edits are rejected before the graph resumes.
+
+What happens internally:
+- The graph resumes using LangGraph's Command({ resume: reviewedRecord })
+  mechanism, reusing the run's original threadId so it picks up exactly
+  where it paused at the human-review interrupt.
+- followUpAgent and planningAgent run using the REVIEWED data (not the
+  original AI-generated draft) — this is enforced by finalizeRecordNode,
+  which prefers state.reviewedRecord over the raw extraction when
+  assembling the final record.
+- The resulting MeetingAnalysis is Zod-validated (meetingAnalysisSchema)
+  before being persisted.
+
+Success response (200):
+{
+  "ok": true,
+  "analysisRun": {
+    "_id": "...",
+    "status": "FINALIZED",
+    "result": {
+      /* full MeetingAnalysis, now including followUp and nextAgenda,
+         which do not exist before resume */
+    },
+    ...
+  }
+}
+
+Side effects on the Meeting record:
+- meeting.status is set to FINALIZED
+- meeting.latestReviewedRecord is set to the submitted reviewedRecord
+- meeting.followUpEmail and meeting.nextAgenda are populated from the
+  final record
+
+Error responses:
+- 404 ANALYSIS_NOT_FOUND — meeting or run doesn't exist
+- 403 ANALYSIS_FORBIDDEN — meeting/run belongs to another user
+- 400 ANALYSIS_REQUEST_INVALID — wrong run status for resume, or
+  reviewedRecord failed schema validation
+
+### POST /api/meetings/:meetingId/analysis/:analysisRunId/retry
+Not yet implemented. Currently returns 501:
+{
+  "ok": false,
+  "error": {
+    "code": "NOT_IMPLEMENTED",
+    "message": "Meeting TODO: retry analysis"
+  }
+}
+
+## Metrics Endpoints
+
+### GET /api/metrics/analysis-runs
+Returns aggregate statistics across all of the authenticated user's own
+analysis runs. Requires authentication; not scoped to a specific meeting
+(covers all of the user's meetings).
+
+Success response (200):
+{
+  "ok": true,
+  "metrics": {
+    "totalRuns": 14,
+    "byStatus": { "NEEDS_REVIEW": 11, "FINALIZED": 2, "FAILED": 1 },
+    "byRequestedModel": { "mock": 14 },
+    "totalRetries": 0,
+    "totalWarnings": 0,
+    "averageDurationMs": 27334,
+    "recentRuns": [
+      {
+        "analysisRunId": "...",
+        "meetingId": "...",
+        "status": "FINALIZED",
+        "requestedModel": "mock",
+        "actualModel": "mock",
+        "warningCount": 0,
+        "startedAt": "...",
+        "completedAt": "...",
+        "durationMs": 41459
+      }
+      /* up to 10 most recent runs */
+    ]
+  }
+}
+
+Notes:
+- averageDurationMs is computed only across runs that have a completedAt
+  timestamp (still-paused NEEDS_REVIEW runs with no completedAt are
+  excluded from the average, not counted as 0).
+- recentRuns intentionally excludes transcript content, prompts, and raw
+  provider error details — only public status/timing/model fields, per
+  spec section 20 (no transcript/secret leakage in any application output).
+
+Error responses:
+- 401 AUTH_MISSING_TOKEN / AUTH_INVALID_TOKEN — same as any protected route
+
+
+
 - Request and response examples.
 - Error envelope shape.
 

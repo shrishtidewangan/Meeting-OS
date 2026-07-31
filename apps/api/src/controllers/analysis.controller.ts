@@ -41,17 +41,27 @@ export const analysisController = {
   // POST /api/meetings/:meetingId/analysis
   // Body: { scenario?: "success" | "partial-failure" | "timeout" | "malformed-output" }
   async start(req: AuthenticatedRequest, res: Response) {
-    try {
-      const run = await analysisService.startAnalysis(
+  try {
+    const useGraph = req.body?.useGraph === true;
+
+    if (useGraph) {
+      const { run, rawResult } = await analysisService.startGraphAnalysis(
         req.userId!,
-        req.params.meetingId,
-        req.body?.scenario
+        req.params.meetingId
       );
-      res.status(201).json({ ok: true, analysisRun: run });
-    } catch (err) {
-      handleError(err, res);
+      return res.status(201).json({ ok: true, analysisRun: run, debugRawResult: rawResult });
     }
-  },
+
+    const run = await analysisService.startAnalysis(
+      req.userId!,
+      req.params.meetingId,
+      req.body?.scenario
+    );
+    res.status(201).json({ ok: true, analysisRun: run });
+  } catch (err) {
+    handleError(err, res);
+  }
+},
 
   // GET /api/meetings/:meetingId/analysis/:analysisRunId
   async getForMeeting(req: AuthenticatedRequest, res: Response) {
@@ -60,6 +70,21 @@ export const analysisController = {
         req.userId!,
         req.params.meetingId,
         req.params.analysisRunId
+      );
+      res.status(200).json({ ok: true, analysisRun: run });
+    } catch (err) {
+      handleError(err, res);
+    }
+  },
+
+  // POST /api/meetings/:meetingId/analysis/:analysisRunId/resume
+  async resume(req: AuthenticatedRequest, res: Response) {
+    try {
+      const run = await analysisService.resumeGraphAnalysis(
+        req.userId!,
+        req.params.meetingId,
+        req.params.analysisRunId,
+        req.body?.reviewedRecord
       );
       res.status(200).json({ ok: true, analysisRun: run });
     } catch (err) {

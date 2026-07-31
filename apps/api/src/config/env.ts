@@ -23,6 +23,13 @@ export type AppEnv = {
   JWT_ISSUER: string;
   AI_MODE: "mock" | "live";
   MOCK_AI_SCENARIO: string;
+  OPENROUTER_API_KEY: string | undefined;
+  OPENROUTER_MODEL: string;
+  OPENROUTER_REASONING_MODEL: string | undefined;
+  OPENROUTER_REASONING_EFFORT: string;
+  OPENROUTER_BASE_URL: string;
+  AI_REQUEST_TIMEOUT_MS: number;
+  AI_MAX_RETRIES: number;
 };
 
 function required(name: string): string {
@@ -42,5 +49,12 @@ export function getEnv(): AppEnv {
     JWT_ISSUER: required("JWT_ISSUER"),
     AI_MODE: (process.env.AI_MODE as "mock" | "live") ?? "mock",
     MOCK_AI_SCENARIO: process.env.MOCK_AI_SCENARIO ?? "success",
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL ?? "openrouter/free",
+    OPENROUTER_REASONING_MODEL: process.env.OPENROUTER_REASONING_MODEL,
+    OPENROUTER_REASONING_EFFORT: process.env.OPENROUTER_REASONING_EFFORT ?? "medium",
+    OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
+    AI_REQUEST_TIMEOUT_MS: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 30000),
+    AI_MAX_RETRIES: Number(process.env.AI_MAX_RETRIES ?? 1),
   };
 }

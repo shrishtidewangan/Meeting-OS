@@ -10,16 +10,17 @@
 
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model";
+import { UserRepository } from "../repositories/user.repository";
 import { getEnv } from "../config/env";
 
 const env = getEnv();
 const SALT_ROUNDS = 10;
+const userRepository = new UserRepository();
 
 export class AuthService {
   async register(name: string, email: string, password: string) {
     // 1. Check if a user with this email already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
       throw new Error("An account with this email already exists");
     }
@@ -28,7 +29,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     // 3. Create the user in the database
-    const user = await User.create({ name, email, passwordHash });
+    const user = await userRepository.create({ name, email, passwordHash });
 
     // 4. Issue a JWT so the user is logged in immediately after registering
     const token = jwt.sign(
@@ -42,7 +43,7 @@ export class AuthService {
 
   async login(email: string, password: string) {
     // 1. Find the user, including the normally-hidden passwordHash
-    const user = await User.findOne({ email }).select("+passwordHash");
+    const user = await userRepository.findByEmail(email, true);
     if (!user) {
       throw new Error("Invalid email or password");
     }

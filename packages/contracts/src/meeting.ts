@@ -1,7 +1,5 @@
 export const meetingTypes = ["PROJECT", "CUSTOMER_INTERVIEW", "SALES_CALL", "TEAM_STANDUP"] as const;
-
 export type MeetingType = (typeof meetingTypes)[number];
-
 export const meetingStatuses = [
   "DRAFT",
   "QUEUED",
@@ -11,13 +9,10 @@ export const meetingStatuses = [
   "FINALIZED",
   "FAILED"
 ] as const;
-
 export type MeetingStatus = (typeof meetingStatuses)[number];
-
 export type Participant = {
   name: string;
 };
-
 export type MeetingInput = {
   title: string;
   meetingType: MeetingType;
@@ -28,4 +23,3 @@ export type MeetingInput = {
   desiredOutcome?: string;
   transcript: string;
 };
-

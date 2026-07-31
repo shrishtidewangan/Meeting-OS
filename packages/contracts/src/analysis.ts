@@ -81,6 +81,9 @@ export type AgentRunSummary = {
   durationMs?: number;
   requestedModel?: string;
   actualModel?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  reasoningTokens?: number;
   retryCount: number;
 };
 

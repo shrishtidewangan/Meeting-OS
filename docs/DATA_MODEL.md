@@ -79,10 +79,76 @@ Collection: `analysisruns`
 - No real model calls occur; `requestedModel`/`actualModel` are both hardcoded to `"mock"`.
 - Starting a new analysis on the same meeting creates a new `AnalysisRun` document each time — there's no dedupe or "latest run" concept yet at the database level (the frontend tracks the current run via the URL's `runId` query parameter instead).
 
-- Indexes.
-- Ownership rules.
-- Transcript storage behavior.
-- Sanitized metrics storage.
+## Indexes
 
-TODO: replace this scaffold with your data model documentation.
+| Collection | Index | Purpose |
+|---|---|---|
+| users | email (unique) | Enforces one account per email at the database level, backing up the application-level duplicate check |
+| meetings | ownerId | Fast lookup of "all meetings belonging to this user" (used by the dashboard and list endpoint) |
+| analysisruns | ownerId | Fast lookup of "all runs belonging to this user" (used by the metrics endpoint) |
+| analysisruns | meetingId | Fast lookup of "all runs for this meeting" |
+
+## Ownership Rules
+
+Every protected resource (meetings, transcripts, analysis runs, metrics)
+is scoped to the authenticated user via `ownerId`, taken from the JWT,
+never from the request body or URL.
+
+- **Meetings**: a meeting that doesn't exist returns 404 MEETING_NOT_FOUND;
+  a meeting that exists but belongs to another user returns 403
+  MEETING_FORBIDDEN. This distinction is deliberate — it matches the
+  literal "Forbidden cross-user access" wording from the spec, at the
+  cost of confirming to a non-owner that a given id exists (a reasonable
+  tradeoff, documented as a known design choice).
+- **Analysis runs**: same 404/403 split, checked via a compound query
+  requiring the run's `_id`, `meetingId`, AND `ownerId` to all match
+  together — a run cannot be fetched or resumed by anyone other than the
+  owner of both the run and its parent meeting.
+- **Metrics**: not scoped to a single meeting; instead scoped to "all
+  runs where ownerId = the authenticated user," so one user's metrics
+  summary never includes another user's data.
+- **Resume**: additionally checks the run's current status (must be
+  NEEDS_REVIEW or PARTIAL_FAILURE) before allowing the state transition,
+  independent of ownership — an owner cannot resume a run that's already
+  FINALIZED or still RUNNING.
+
+## Transcript Storage Behavior
+
+- Stored as plain text directly on the `Meeting` document (`transcript`
+  field) — no separate collection, no file storage on disk.
+- Length is validated at three layers: the API's manual validation
+  (precise error messages), the Mongoose schema's minlength/maxlength
+  (database-level backup), and — once analysis starts — the graph's own
+  `validateInput` node, which independently re-validates against the
+  same `meetingInputSchema` (defense in depth, since the graph could in
+  principle be invoked outside the HTTP layer, e.g. in tests).
+- File uploads (`.txt`/`.md`) are read into memory and converted to a
+  UTF-8 string before the same validation applies — never written to disk.
+- Transcript content is deliberately excluded from all application
+  logs. `observability/logger.ts`'s `sanitizeMetadata()` strips a
+  `transcript` key from any logged metadata object as a blocklist
+  safeguard, and in practice, none of the actual `logInfo()` calls in the
+  codebase (graph nodes, analysis service, OpenRouter client) ever pass
+  transcript content in the first place — confirmed by inspecting real
+  console output during live testing.
+
+## Sanitized Metrics Storage
+
+Metrics are **not stored as a separate persisted collection** — they are
+computed on demand from the existing `analysisruns` collection each time
+`GET /api/metrics/analysis-runs` is called (an aggregation over that
+user's own runs). This avoids a second copy of run data that could drift
+out of sync with the source of truth.
+
+What the metrics response deliberately excludes, even though the
+underlying `AnalysisRun` documents contain it:
+- The full `result` field (the entire `MeetingAnalysis`, which could
+  contain transcript-derived evidence excerpts) — metrics only surface
+  `status`, `requestedModel`, `actualModel`, `warningCount` (a count,
+  not the warning text itself), and timing fields.
+- Raw provider error messages — `sanitizedErrors` exists on the model for
+  this reason, distinct from any raw error text a provider might return.
+- Anything from another user's runs — the aggregation query is always
+  scoped by `ownerId` before any computation happens.
+
 
