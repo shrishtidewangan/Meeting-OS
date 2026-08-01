@@ -78,7 +78,4 @@ meetingRouter.get("/:meetingId/analysis/:analysisRunId", analysisController.getF
 // Resume/retry require the LangGraph human-review interrupt — still out of scope
 meetingRouter.post("/:meetingId/analysis/:analysisRunId/resume", analysisController.resume);
 
-meetingRouter.post(
-  "/:meetingId/analysis/:analysisRunId/retry",
-  createNotImplementedHandler("retry analysis")
-);
+meetingRouter.post("/:meetingId/analysis/:analysisRunId/retry", analysisController.retry);

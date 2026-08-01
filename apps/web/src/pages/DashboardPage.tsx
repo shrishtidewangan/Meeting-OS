@@ -1,18 +1,3 @@
-// export function DashboardPage() {
-//   return (
-//     <section className="panel">
-//       <h1>Meeting Dashboard Shell</h1>
-//       <p className="muted">TODO: list owned meetings, filters, statuses, action counts, and empty states.</p>
-//       <ul className="todo-list">
-//         <li>Recent meetings.</li>
-//         <li>Meeting type and status filters.</li>
-//         <li>Open action-item count.</li>
-//         <li>New meeting entry point.</li>
-//       </ul>
-//     </section>
-//   );
-// }
-
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { listMeetings, type Meeting } from "../services/meetingApi";
@@ -20,13 +5,13 @@ import { getToken } from "../services/apiClient";
 import type { MeetingType, MeetingStatus } from "@meetingos/contracts";
 
 const statusColors: Record<MeetingStatus, string> = {
-  DRAFT: "#8a8f89",
-  QUEUED: "#8a7a3a",
-  RUNNING: "#2f6f9e",
-  PARTIAL_FAILURE: "#b3701e",
-  NEEDS_REVIEW: "#a3852c",
-  FINALIZED: "#2e7d4f",
-  FAILED: "#b3261e",
+  DRAFT: "bg-gray-500",
+  QUEUED: "bg-amber-700",
+  RUNNING: "bg-blue-700",
+  PARTIAL_FAILURE: "bg-orange-700",
+  NEEDS_REVIEW: "bg-amber-600",
+  FINALIZED: "bg-green-700",
+  FAILED: "bg-red-700",
 };
 
 export function DashboardPage() {
@@ -59,46 +44,59 @@ export function DashboardPage() {
 
   if (loading) {
     return (
-      <section className="panel">
-        <p className="muted">Loading meetings...</p>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <p className="text-sm text-gray-600">Loading meetings...</p>
       </section>
     );
   }
 
   if (error) {
     return (
-      <section className="panel">
-        <h1>Meeting Dashboard</h1>
-        <p style={{ color: "#b3261e" }}>{error}</p>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h1 className="text-xl font-bold">Meeting Dashboard</h1>
+        <p className="text-sm text-red-700">{error}</p>
       </section>
     );
   }
 
   return (
-    <section className="panel">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>Meeting Dashboard</h1>
+    <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Meeting Dashboard</h1>
         <Link to="/meetings/new">
-          <button type="button">New meeting</button>
+          <button
+            type="button"
+            className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+          >
+            New meeting
+          </button>
         </Link>
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+      <div className="mb-5 flex flex-wrap gap-3">
         <input
           type="text"
           placeholder="Search by title..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ padding: 8, flex: "1 1 200px" }}
+          className="min-w-48 flex-1 rounded border border-gray-300 p-2 text-sm"
         />
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as MeetingType | "ALL")} style={{ padding: 8 }}>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as MeetingType | "ALL")}
+          className="rounded border border-gray-300 p-2 text-sm"
+        >
           <option value="ALL">All types</option>
           <option value="PROJECT">Project</option>
           <option value="CUSTOMER_INTERVIEW">Customer interview</option>
           <option value="SALES_CALL">Sales call</option>
           <option value="TEAM_STANDUP">Team stand-up</option>
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as MeetingStatus | "ALL")} style={{ padding: 8 }}>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as MeetingStatus | "ALL")}
+          className="rounded border border-gray-300 p-2 text-sm"
+        >
           <option value="ALL">All statuses</option>
           <option value="DRAFT">Draft</option>
           <option value="QUEUED">Queued</option>
@@ -111,52 +109,52 @@ export function DashboardPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="muted" style={{ textAlign: "center", padding: "40px 0" }}>
+        <div className="py-10 text-center text-sm text-gray-600">
           {meetings.length === 0 ? (
             <>
               <p>No meetings yet.</p>
-              <Link to="/meetings/new">Create your first meeting</Link>
+              <Link to="/meetings/new" className="font-semibold text-teal-800 hover:underline">
+                Create your first meeting
+              </Link>
             </>
           ) : (
             <p>No meetings match your search or filters.</p>
           )}
         </div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table className="w-full border-collapse text-sm">
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #d9dfd6" }}>
-              <th style={{ padding: "8px 4px" }}>Title</th>
-              <th style={{ padding: "8px 4px" }}>Type</th>
-              <th style={{ padding: "8px 4px" }}>Status</th>
-              <th style={{ padding: "8px 4px" }}>Date</th>
-              <th style={{ padding: "8px 4px" }}>Participants</th>
+            <tr className="border-b border-gray-200 text-left">
+              <th className="px-1 py-2">Title</th>
+              <th className="px-1 py-2">Type</th>
+              <th className="px-1 py-2">Status</th>
+              <th className="px-1 py-2">Date</th>
+              <th className="px-1 py-2">Participants</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((meeting) => (
-              <tr key={meeting._id} style={{ borderBottom: "1px solid #ececec" }}>
-                <td style={{ padding: "10px 4px" }}>
-                  <Link to={`/meetings/${meeting._id}`}>{meeting.title}</Link>
+              <tr key={meeting._id} className="border-b border-gray-100">
+                <td className="px-1 py-2.5">
+                  <Link
+                    to={`/meetings/${meeting._id}`}
+                    className="font-semibold text-teal-800 hover:underline"
+                  >
+                    {meeting.title}
+                  </Link>
                 </td>
-                <td style={{ padding: "10px 4px" }}>{meeting.meetingType.replace("_", " ")}</td>
-                <td style={{ padding: "10px 4px" }}>
+                <td className="px-1 py-2.5">{meeting.meetingType.replace("_", " ")}</td>
+                <td className="px-1 py-2.5">
                   <span
-                    style={{
-                      color: "#fff",
-                      background: statusColors[meeting.status],
-                      padding: "2px 10px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 650,
-                    }}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold text-white ${statusColors[meeting.status]}`}
                   >
                     {meeting.status.replace("_", " ")}
                   </span>
                 </td>
-                <td style={{ padding: "10px 4px" }}>
+                <td className="px-1 py-2.5">
                   {new Date(meeting.meetingDate).toLocaleDateString()}
                 </td>
-                <td style={{ padding: "10px 4px" }}>{meeting.participants.length}</td>
+                <td className="px-1 py-2.5">{meeting.participants.length}</td>
               </tr>
             ))}
           </tbody>

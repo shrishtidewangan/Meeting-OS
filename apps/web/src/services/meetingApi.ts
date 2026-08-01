@@ -25,6 +25,15 @@ export type Meeting = {
   desiredOutcome?: string;
   transcript: string;
   status: MeetingStatus;
+  followUpEmail?: { subject: string; body: string };
+  nextAgenda?: {
+    title: string;
+    objectives: string[];
+    items: string[];
+    requiredPreparation: string[];
+    suggestedAttendees: string[];
+    suggestedDurationMinutes: number;
+  };
   createdAt: string;
   updatedAt: string;
 };

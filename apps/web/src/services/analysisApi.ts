@@ -55,10 +55,14 @@ export type AnalysisRun = {
 
 export type MockScenario = "success" | "partial-failure" | "timeout" | "malformed-output";
 
-export async function startAnalysis(meetingId: string, scenario?: MockScenario) {
+export async function startAnalysis(meetingId: string) {
+  // Always uses the real LangGraph pipeline now — the fixture-only path
+  // was a Day-1 stepping stone before the graph existed; resume only
+  // works against runs that actually went through a real graph.invoke(),
+  // so the UI must always use useGraph: true.
   const res = await apiClient.post<{ ok: true; analysisRun: AnalysisRun }>(
     `/api/meetings/${meetingId}/analysis`,
-    scenario ? { scenario } : {}
+    { useGraph: true }
   );
   return res.analysisRun;
 }
@@ -70,10 +74,20 @@ export async function getAnalysisStatus(meetingId: string, analysisRunId: string
   return res.analysisRun;
 }
 
+// Top-level lookup (no meetingId needed) — used by RunDetailsPage, which
+// is routed at /runs/:analysisRunId with no meetingId in the URL.
+export async function getAnalysisRunById(analysisRunId: string) {
+  const res = await apiClient.get<{ ok: true; analysisRun: AnalysisRun }>(
+    `/api/analysis/${analysisRunId}`
+  );
+  return res.analysisRun;
+}
+
 export async function resumeAnalysis(
   meetingId: string,
   analysisRunId: string,
   reviewedRecord: {
+    summary: MeetingAnalysis["summary"];
     decisions: MeetingAnalysis["decisions"];
     actionItems: MeetingAnalysis["actionItems"];
     risksAndBlockers: MeetingAnalysis["risksAndBlockers"];

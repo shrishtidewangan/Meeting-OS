@@ -1,18 +1,3 @@
-// export function ReviewWorkspacePage() {
-//   return (
-//     <section className="panel">
-//       <h1>Review Workspace Shell</h1>
-//       <p className="muted">TODO: implement editable draft review and graph resume with reviewed data.</p>
-//       <ul className="todo-list">
-//         <li>Edit summary, decisions, action items, risks, blockers, and open questions.</li>
-//         <li>Mark inferred owners and dates clearly.</li>
-//         <li>Confirm or change inferred values.</li>
-//         <li>Resume LangGraph with reviewed values.</li>
-//       </ul>
-//     </section>
-//   );
-// }
-
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { getAnalysisStatus, resumeAnalysis, type AnalysisRun } from "../services/analysisApi";
@@ -34,46 +19,42 @@ const EDITABLE_STATUSES = ["NEEDS_REVIEW", "PARTIAL_FAILURE"];
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   const pct = Math.round(confidence * 100);
-  const color = confidence >= 0.8 ? "#2e7d4f" : confidence >= 0.5 ? "#a3852c" : "#b3261e";
-  return (
-    <span style={{ fontSize: 12, color, fontWeight: 650, marginLeft: 8 }}>
-      {pct}% confidence
-    </span>
-  );
+  const color = confidence >= 0.8 ? "text-green-700" : confidence >= 0.5 ? "text-amber-700" : "text-red-700";
+  return <span className={`ml-2 text-xs font-semibold ${color}`}>{pct}% confidence</span>;
 }
 
 function InferredTag({ inferred }: { inferred: boolean }) {
   if (!inferred) return null;
   return (
-    <span
-      style={{
-        fontSize: 11,
-        background: "#f0e6c8",
-        color: "#7a5a00",
-        padding: "1px 6px",
-        borderRadius: 4,
-        marginLeft: 8,
-        fontWeight: 650,
-      }}
-    >
+    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
       INFERRED
     </span>
   );
 }
 
-const inputStyle = { padding: 6, border: "1px solid #d9dfd6", borderRadius: 4, fontSize: 14 };
-const smallBtnStyle = {
-  padding: "4px 10px",
-  fontSize: 12,
-  border: "1px solid #d9dfd6",
-  borderRadius: 4,
-  background: "#fff",
-  cursor: "pointer",
-};
+const inputClass =
+  "rounded border border-gray-300 p-1.5 text-sm focus:border-teal-700 focus:outline-none";
+const smallBtnClass =
+  "rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium hover:bg-gray-50";
 
 function makeId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+type SummaryState = {
+  executiveSummary: string;
+  themes: string[];
+  outcome: "CLEAR_OUTCOME" | "PARTIAL_OUTCOME" | "NO_CLEAR_OUTCOME";
+};
+
+type AgendaState = {
+  title: string;
+  objectives: string[];
+  items: string[];
+  requiredPreparation: string[];
+  suggestedAttendees: string[];
+  suggestedDurationMinutes: number;
+};
 
 export function ReviewWorkspacePage() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -85,12 +66,30 @@ export function ReviewWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
 
-  // Editable copies — initialized once the run loads, only meaningful
-  // while status is NEEDS_REVIEW/PARTIAL_FAILURE (before resume).
+  const [summary, setSummary] = useState<SummaryState>({
+    executiveSummary: "",
+    themes: [],
+    outcome: "PARTIAL_OUTCOME",
+  });
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [risksAndBlockers, setRisksAndBlockers] = useState<RiskOrBlocker[]>([]);
   const [openQuestions, setOpenQuestions] = useState<OpenQuestion[]>([]);
+
+  // Local-only editable copies of the generated follow-up/agenda — there is
+  // no backend endpoint to persist edits to an already-finalized record, so
+  // these exist for the user to tweak wording before copying elsewhere,
+  // not to save back to the database.
+  const [followUpDraft, setFollowUpDraft] = useState({ subject: "", body: "" });
+  const [agendaDraft, setAgendaDraft] = useState<AgendaState>({
+    title: "",
+    objectives: [],
+    items: [],
+    requiredPreparation: [],
+    suggestedAttendees: [],
+    suggestedDurationMinutes: 30,
+  });
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
@@ -105,10 +104,17 @@ export function ReviewWorkspacePage() {
       .then((result) => {
         setRun(result);
         if (result.result) {
+          setSummary(result.result.summary);
           setDecisions(result.result.decisions ?? []);
           setActionItems(result.result.actionItems ?? []);
           setRisksAndBlockers(result.result.risksAndBlockers ?? []);
           setOpenQuestions(result.result.openQuestions ?? []);
+          if (result.result.followUp) {
+            setFollowUpDraft(result.result.followUp);
+          }
+          if (result.result.nextAgenda) {
+            setAgendaDraft(result.result.nextAgenda);
+          }
         }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load analysis"))
@@ -122,15 +128,20 @@ export function ReviewWorkspacePage() {
     setResumeError(null);
     setResuming(true);
     try {
-      // Marking confirmedByUser: true on every action item, since by
-      // definition it has now passed through human review.
       const updatedRun = await resumeAnalysis(meetingId, runId, {
+        summary,
         decisions,
         actionItems: actionItems.map((a) => ({ ...a, confirmedByUser: true })),
         risksAndBlockers,
         openQuestions,
       });
       setRun(updatedRun);
+      if (updatedRun.result?.followUp) {
+        setFollowUpDraft(updatedRun.result.followUp);
+      }
+      if (updatedRun.result?.nextAgenda) {
+        setAgendaDraft(updatedRun.result.nextAgenda);
+      }
       setActiveTab("Follow-Up");
     } catch (err) {
       setResumeError(err instanceof Error ? err.message : "Failed to resume analysis");
@@ -139,20 +150,35 @@ export function ReviewWorkspacePage() {
     }
   }
 
+  async function handleCopyFollowUp() {
+    const text = `Subject: ${followUpDraft.subject}\n\n${followUpDraft.body}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus(null), 2000);
+    } catch {
+      setCopyStatus("Could not copy — please select and copy manually.");
+    }
+  }
+
   if (loading) {
     return (
-      <section className="panel">
-        <p className="muted">Loading analysis...</p>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <p className="text-sm text-gray-600">Loading analysis...</p>
       </section>
     );
   }
 
   if (error || !run) {
     return (
-      <section className="panel">
-        <h1>Review Workspace</h1>
-        <p style={{ color: "#b3261e" }}>{error ?? "Analysis not found."}</p>
-        {meetingId && <Link to={`/meetings/${meetingId}`}>Back to meeting</Link>}
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h1 className="text-xl font-bold">Review Workspace</h1>
+        <p className="text-sm text-red-700">{error ?? "Analysis not found."}</p>
+        {meetingId && (
+          <Link to={`/meetings/${meetingId}`} className="font-semibold text-teal-800 hover:underline">
+            Back to meeting
+          </Link>
+        )}
       </section>
     );
   }
@@ -161,9 +187,9 @@ export function ReviewWorkspacePage() {
 
   if (!analysis) {
     return (
-      <section className="panel">
-        <h1>Review Workspace</h1>
-        <p className="muted">
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h1 className="text-xl font-bold">Review Workspace</h1>
+        <p className="text-sm text-gray-600">
           This run has status <strong>{run.status}</strong> but no result is available yet.
         </p>
       </section>
@@ -171,78 +197,120 @@ export function ReviewWorkspacePage() {
   }
 
   return (
-    <section className="panel">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ margin: 0 }}>Review Workspace</h1>
-        <Link to={`/meetings/${meetingId}`}>Back to meeting</Link>
+    <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Review Workspace</h1>
+        <Link to={`/meetings/${meetingId}`} className="font-semibold text-teal-800 hover:underline">
+          Back to meeting
+        </Link>
       </div>
-      <p className="muted" style={{ marginTop: 4 }}>
+      <p className="mt-1 text-sm text-gray-600">
         Run status: <strong>{run.status}</strong> &middot; Generated{" "}
         {new Date(analysis.generatedAt).toLocaleString()}
       </p>
 
       {isEditable && (
-        <div style={{ background: "#eef5f0", border: "1px solid #bcdcc5", borderRadius: 6, padding: 12, marginTop: 12 }}>
-          This draft is awaiting your review. Edit decisions, action items, risks, and
-          open questions below, then click <strong>Confirm &amp; Resume</strong> to
+        <div className="mt-3 rounded border border-green-200 bg-green-50 p-3 text-sm">
+          This draft is awaiting your review. Edit the summary, decisions, action items,
+          risks, and open questions below, then click <strong>Confirm &amp; Resume</strong> to
           generate the follow-up email and next-meeting agenda from your reviewed data.
         </div>
       )}
 
       {run.warnings.length > 0 && (
-        <div style={{ background: "#fdecea", border: "1px solid #f3b7b0", borderRadius: 6, padding: 12, marginTop: 12 }}>
-          <strong style={{ color: "#b3261e" }}>Warnings</strong>
-          <ul style={{ margin: "6px 0 0 18px" }}>
+        <div className="mt-3 rounded border border-red-200 bg-red-50 p-3">
+          <strong className="text-sm text-red-700">Warnings</strong>
+          <ul className="ml-4 mt-1.5 list-disc text-sm">
             {run.warnings.map((w, i) => (
               <li key={i}>
-                {w.message} {w.nodeName && <span className="muted">({w.nodeName})</span>}
+                {w.message} {w.nodeName && <span className="text-gray-500">({w.nodeName})</span>}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <nav style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 20, borderBottom: "1px solid #d9dfd6" }}>
+      <nav className="mt-5 flex flex-wrap gap-1 border-b border-gray-200">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            style={{
-              padding: "8px 14px",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === tab ? "2px solid #285f5f" : "2px solid transparent",
-              fontWeight: activeTab === tab ? 700 : 500,
-              color: activeTab === tab ? "#19201d" : "#5e6860",
-              cursor: "pointer",
-            }}
+            className={`border-b-2 px-3.5 py-2 text-sm ${
+              activeTab === tab
+                ? "border-teal-800 font-bold text-gray-900"
+                : "border-transparent font-medium text-gray-600"
+            }`}
           >
             {tab}
           </button>
         ))}
       </nav>
 
-      <div style={{ paddingTop: 20 }}>
+      <div className="pt-5">
         {activeTab === "Overview" && (
           <div>
-            <p>{analysis.summary.executiveSummary}</p>
-            <p>
-              <strong>Outcome:</strong> {analysis.summary.outcome.replace(/_/g, " ")}
-            </p>
-            <p>
-              <strong>Themes:</strong> {analysis.summary.themes.join(", ")}
-            </p>
+            {isEditable ? (
+              <div className="flex max-w-xl flex-col gap-3">
+                <label className="text-sm font-medium">
+                  Executive summary
+                  <textarea
+                    value={summary.executiveSummary}
+                    onChange={(e) => setSummary({ ...summary, executiveSummary: e.target.value })}
+                    rows={4}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Outcome
+                  <select
+                    value={summary.outcome}
+                    onChange={(e) =>
+                      setSummary({ ...summary, outcome: e.target.value as SummaryState["outcome"] })
+                    }
+                    className={`mt-1 block ${inputClass}`}
+                  >
+                    <option value="CLEAR_OUTCOME">Clear outcome</option>
+                    <option value="PARTIAL_OUTCOME">Partial outcome</option>
+                    <option value="NO_CLEAR_OUTCOME">No clear outcome</option>
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Themes <span className="font-normal text-gray-500">(comma-separated)</span>
+                  <input
+                    type="text"
+                    value={summary.themes.join(", ")}
+                    onChange={(e) =>
+                      setSummary({
+                        ...summary,
+                        themes: e.target.value.split(",").map((t) => t.trim()).filter(Boolean),
+                      })
+                    }
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm">{analysis.summary.executiveSummary}</p>
+                <p className="mt-2 text-sm">
+                  <strong>Outcome:</strong> {analysis.summary.outcome.replace(/_/g, " ")}
+                </p>
+                <p className="mt-2 text-sm">
+                  <strong>Themes:</strong> {analysis.summary.themes.join(", ")}
+                </p>
+              </>
+            )}
           </div>
         )}
 
         {activeTab === "Decisions" && (
           <div>
-            {decisions.length === 0 && <p className="muted">No decisions.</p>}
+            {decisions.length === 0 && <p className="text-sm text-gray-600">No decisions.</p>}
             {decisions.map((d, i) => (
-              <div key={d.id} style={{ borderBottom: "1px solid #ececec", padding: "12px 0" }}>
+              <div key={d.id} className="border-b border-gray-100 py-3">
                 {isEditable ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
+                  <div className="flex max-w-xl flex-col gap-1.5">
                     <textarea
                       value={d.statement}
                       onChange={(e) => {
@@ -251,9 +319,9 @@ export function ReviewWorkspacePage() {
                         setDecisions(copy);
                       }}
                       rows={2}
-                      style={inputStyle}
+                      className={inputClass}
                     />
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
                         placeholder="Owner (leave blank if unknown)"
@@ -263,12 +331,12 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...d, owner: e.target.value || null, inferred: false };
                           setDecisions(copy);
                         }}
-                        style={{ ...inputStyle, flex: 1 }}
+                        className={`flex-1 ${inputClass}`}
                       />
                       <InferredTag inferred={d.inferred} />
                       <button
                         type="button"
-                        style={smallBtnStyle}
+                        className={smallBtnClass}
                         onClick={() => setDecisions(decisions.filter((_, idx) => idx !== i))}
                       >
                         Remove
@@ -277,12 +345,12 @@ export function ReviewWorkspacePage() {
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0 }}>
+                    <p className="text-sm">
                       {d.statement}
                       <ConfidenceBadge confidence={d.confidence} />
                       <InferredTag inferred={d.inferred} />
                     </p>
-                    <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+                    <p className="mt-1 text-xs text-gray-600">
                       Owner: {d.owner ?? "Not specified"} &middot; Evidence: "{d.evidence.excerpt}"
                     </p>
                   </>
@@ -292,7 +360,7 @@ export function ReviewWorkspacePage() {
             {isEditable && (
               <button
                 type="button"
-                style={{ ...smallBtnStyle, marginTop: 8 }}
+                className={`mt-2 ${smallBtnClass}`}
                 onClick={() =>
                   setDecisions([
                     ...decisions,
@@ -315,11 +383,11 @@ export function ReviewWorkspacePage() {
 
         {activeTab === "Action Items" && (
           <div>
-            {actionItems.length === 0 && <p className="muted">No action items.</p>}
+            {actionItems.length === 0 && <p className="text-sm text-gray-600">No action items.</p>}
             {actionItems.map((a, i) => (
-              <div key={a.id} style={{ borderBottom: "1px solid #ececec", padding: "12px 0" }}>
+              <div key={a.id} className="border-b border-gray-100 py-3">
                 {isEditable ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
+                  <div className="flex max-w-xl flex-col gap-1.5">
                     <input
                       type="text"
                       value={a.title}
@@ -328,10 +396,10 @@ export function ReviewWorkspacePage() {
                         copy[i] = { ...a, title: e.target.value };
                         setActionItems(copy);
                       }}
-                      style={inputStyle}
+                      className={inputClass}
                       placeholder="Title"
                     />
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="text"
                         placeholder="Owner"
@@ -341,7 +409,7 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...a, owner: e.target.value || null, ownerInferred: false };
                           setActionItems(copy);
                         }}
-                        style={{ ...inputStyle, flex: 1, minWidth: 120 }}
+                        className={`min-w-32 flex-1 ${inputClass}`}
                       />
                       <InferredTag inferred={a.ownerInferred} />
                       <input
@@ -352,7 +420,7 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...a, dueDate: e.target.value || null, dueDateInferred: false };
                           setActionItems(copy);
                         }}
-                        style={inputStyle}
+                        className={inputClass}
                       />
                       <InferredTag inferred={a.dueDateInferred} />
                       <select
@@ -362,7 +430,7 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...a, status: e.target.value as ActionItem["status"] };
                           setActionItems(copy);
                         }}
-                        style={inputStyle}
+                        className={inputClass}
                       >
                         <option value="OPEN">Open</option>
                         <option value="IN_PROGRESS">In progress</option>
@@ -370,7 +438,7 @@ export function ReviewWorkspacePage() {
                       </select>
                       <button
                         type="button"
-                        style={smallBtnStyle}
+                        className={smallBtnClass}
                         onClick={() => setActionItems(actionItems.filter((_, idx) => idx !== i))}
                       >
                         Remove
@@ -379,11 +447,11 @@ export function ReviewWorkspacePage() {
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0 }}>
+                    <p className="text-sm">
                       <strong>{a.title}</strong>
                       <ConfidenceBadge confidence={a.confidence} />
                     </p>
-                    <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+                    <p className="mt-1 text-xs text-gray-600">
                       Owner: {a.owner ?? "Unassigned"}
                       <InferredTag inferred={a.ownerInferred} /> &middot; Due:{" "}
                       {a.dueDate ?? "Not specified"}
@@ -396,7 +464,7 @@ export function ReviewWorkspacePage() {
             {isEditable && (
               <button
                 type="button"
-                style={{ ...smallBtnStyle, marginTop: 8 }}
+                className={`mt-2 ${smallBtnClass}`}
                 onClick={() =>
                   setActionItems([
                     ...actionItems,
@@ -425,12 +493,12 @@ export function ReviewWorkspacePage() {
 
         {activeTab === "Risks & Blockers" && (
           <div>
-            {risksAndBlockers.length === 0 && <p className="muted">No risks or blockers.</p>}
+            {risksAndBlockers.length === 0 && <p className="text-sm text-gray-600">No risks or blockers.</p>}
             {risksAndBlockers.map((r, i) => (
-              <div key={r.id} style={{ borderBottom: "1px solid #ececec", padding: "12px 0" }}>
+              <div key={r.id} className="border-b border-gray-100 py-3">
                 {isEditable ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
-                    <div style={{ display: "flex", gap: 8 }}>
+                  <div className="flex max-w-xl flex-col gap-1.5">
+                    <div className="flex gap-2">
                       <select
                         value={r.type}
                         onChange={(e) => {
@@ -438,7 +506,7 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...r, type: e.target.value as RiskOrBlocker["type"] };
                           setRisksAndBlockers(copy);
                         }}
-                        style={inputStyle}
+                        className={inputClass}
                       >
                         <option value="RISK">Risk</option>
                         <option value="BLOCKER">Blocker</option>
@@ -450,7 +518,7 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...r, impact: e.target.value as RiskOrBlocker["impact"] };
                           setRisksAndBlockers(copy);
                         }}
-                        style={inputStyle}
+                        className={inputClass}
                       >
                         <option value="LOW">Low</option>
                         <option value="MEDIUM">Medium</option>
@@ -458,7 +526,7 @@ export function ReviewWorkspacePage() {
                       </select>
                       <button
                         type="button"
-                        style={smallBtnStyle}
+                        className={smallBtnClass}
                         onClick={() => setRisksAndBlockers(risksAndBlockers.filter((_, idx) => idx !== i))}
                       >
                         Remove
@@ -472,7 +540,7 @@ export function ReviewWorkspacePage() {
                         setRisksAndBlockers(copy);
                       }}
                       rows={2}
-                      style={inputStyle}
+                      className={inputClass}
                       placeholder="Description"
                     />
                     <input
@@ -483,21 +551,19 @@ export function ReviewWorkspacePage() {
                         copy[i] = { ...r, mitigation: e.target.value || null };
                         setRisksAndBlockers(copy);
                       }}
-                      style={inputStyle}
+                      className={inputClass}
                       placeholder="Suggested mitigation (optional)"
                     />
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0 }}>
+                    <p className="text-sm">
                       <strong>{r.type}</strong> &middot; Impact: {r.impact}
                       <ConfidenceBadge confidence={r.confidence} />
                     </p>
-                    <p style={{ margin: "4px 0" }}>{r.description}</p>
+                    <p className="mt-1 text-sm">{r.description}</p>
                     {r.mitigation && (
-                      <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-                        Suggested mitigation: {r.mitigation}
-                      </p>
+                      <p className="mt-1 text-xs text-gray-600">Suggested mitigation: {r.mitigation}</p>
                     )}
                   </>
                 )}
@@ -508,11 +574,11 @@ export function ReviewWorkspacePage() {
 
         {activeTab === "Open Questions" && (
           <div>
-            {openQuestions.length === 0 && <p className="muted">No open questions.</p>}
+            {openQuestions.length === 0 && <p className="text-sm text-gray-600">No open questions.</p>}
             {openQuestions.map((q, i) => (
-              <div key={q.id} style={{ borderBottom: "1px solid #ececec", padding: "12px 0" }}>
+              <div key={q.id} className="border-b border-gray-100 py-3">
                 {isEditable ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 560 }}>
+                  <div className="flex max-w-xl flex-col gap-1.5">
                     <textarea
                       value={q.question}
                       onChange={(e) => {
@@ -521,9 +587,9 @@ export function ReviewWorkspacePage() {
                         setOpenQuestions(copy);
                       }}
                       rows={2}
-                      style={inputStyle}
+                      className={inputClass}
                     />
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
                         placeholder="Suggested owner (optional)"
@@ -533,11 +599,11 @@ export function ReviewWorkspacePage() {
                           copy[i] = { ...q, suggestedOwner: e.target.value || null };
                           setOpenQuestions(copy);
                         }}
-                        style={{ ...inputStyle, flex: 1 }}
+                        className={`flex-1 ${inputClass}`}
                       />
                       <button
                         type="button"
-                        style={smallBtnStyle}
+                        className={smallBtnClass}
                         onClick={() => setOpenQuestions(openQuestions.filter((_, idx) => idx !== i))}
                       >
                         Remove
@@ -546,11 +612,11 @@ export function ReviewWorkspacePage() {
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0 }}>
+                    <p className="text-sm">
                       {q.question}
                       <ConfidenceBadge confidence={q.confidence} />
                     </p>
-                    <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+                    <p className="mt-1 text-xs text-gray-600">
                       Suggested owner: {q.suggestedOwner ?? "Not specified"}
                     </p>
                   </>
@@ -563,16 +629,40 @@ export function ReviewWorkspacePage() {
         {activeTab === "Follow-Up" && (
           <div>
             {analysis.followUp ? (
-              <>
-                <p>
-                  <strong>Subject:</strong> {analysis.followUp.subject}
+              <div className="flex max-w-xl flex-col gap-3">
+                <label className="text-sm font-medium">
+                  Subject
+                  <input
+                    type="text"
+                    value={followUpDraft.subject}
+                    onChange={(e) => setFollowUpDraft({ ...followUpDraft, subject: e.target.value })}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Body
+                  <textarea
+                    value={followUpDraft.body}
+                    onChange={(e) => setFollowUpDraft({ ...followUpDraft, body: e.target.value })}
+                    rows={8}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={handleCopyFollowUp} className={smallBtnClass}>
+                    Copy to clipboard
+                  </button>
+                  {copyStatus && <span className="text-xs text-gray-600">{copyStatus}</span>}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Edits here are local to this page for copying elsewhere — they are not saved back
+                  to the meeting record.
                 </p>
-                <p style={{ whiteSpace: "pre-wrap" }}>{analysis.followUp.body}</p>
-              </>
+              </div>
             ) : (
-              <p className="muted">
-                Not generated yet — the follow-up email is created after this
-                draft is reviewed and the graph resumes.
+              <p className="text-sm text-gray-600">
+                Not generated yet — the follow-up email is created after this draft is reviewed and
+                the graph resumes.
               </p>
             )}
           </div>
@@ -581,56 +671,82 @@ export function ReviewWorkspacePage() {
         {activeTab === "Next Agenda" && (
           <div>
             {analysis.nextAgenda ? (
-              <>
-                <p>
-                  <strong>{analysis.nextAgenda.title}</strong>
+              <div className="flex max-w-xl flex-col gap-3">
+                <label className="text-sm font-medium">
+                  Title
+                  <input
+                    type="text"
+                    value={agendaDraft.title}
+                    onChange={(e) => setAgendaDraft({ ...agendaDraft, title: e.target.value })}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Suggested duration (minutes)
+                  <input
+                    type="number"
+                    value={agendaDraft.suggestedDurationMinutes}
+                    onChange={(e) =>
+                      setAgendaDraft({ ...agendaDraft, suggestedDurationMinutes: Number(e.target.value) })
+                    }
+                    className={`mt-1 block w-32 ${inputClass}`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Objectives <span className="font-normal text-gray-500">(one per line)</span>
+                  <textarea
+                    value={agendaDraft.objectives.join("\n")}
+                    onChange={(e) =>
+                      setAgendaDraft({
+                        ...agendaDraft,
+                        objectives: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    rows={3}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Agenda items <span className="font-normal text-gray-500">(one per line)</span>
+                  <textarea
+                    value={agendaDraft.items.join("\n")}
+                    onChange={(e) =>
+                      setAgendaDraft({
+                        ...agendaDraft,
+                        items: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    rows={4}
+                    className={`mt-1 block w-full ${inputClass}`}
+                  />
+                </label>
+                <p className="text-xs text-gray-500">
+                  Edits here are local to this page — they are not saved back to the meeting
+                  record (no backend endpoint currently persists agenda edits after resume).
                 </p>
-                <p className="muted">
-                  Suggested duration: {analysis.nextAgenda.suggestedDurationMinutes} minutes
-                </p>
-                {analysis.nextAgenda.objectives.length > 0 && (
-                  <>
-                    <strong>Objectives</strong>
-                    <ul>
-                      {analysis.nextAgenda.objectives.map((o, i) => (
-                        <li key={i}>{o}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {analysis.nextAgenda.items.length > 0 && (
-                  <>
-                    <strong>Agenda Items</strong>
-                    <ul>
-                      {analysis.nextAgenda.items.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
+              </div>
             ) : (
-              <p className="muted">
-                Not generated yet — the next-meeting agenda is created after
-                this draft is reviewed and the graph resumes.
+              <p className="text-sm text-gray-600">
+                Not generated yet — the next-meeting agenda is created after this draft is
+                reviewed and the graph resumes.
               </p>
             )}
           </div>
         )}
 
         {activeTab === "Run Details" && (
-          <div>
+          <div className="text-sm">
             <p>
               <strong>Analysis Run ID:</strong> {analysis.analysisRunId}
             </p>
-            <p>
+            <p className="mt-1">
               <strong>Status:</strong> {run.status}
             </p>
-            <p>
+            <p className="mt-1">
               <strong>Requested model:</strong> {run.requestedModel} &middot;{" "}
               <strong>Actual model:</strong> {run.actualModel ?? "n/a"}
             </p>
-            <p>
+            <p className="mt-1">
               <strong>Started:</strong> {new Date(run.startedAt).toLocaleString()}
               {run.completedAt && (
                 <>
@@ -644,9 +760,14 @@ export function ReviewWorkspacePage() {
       </div>
 
       {isEditable && (
-        <div style={{ marginTop: 24, borderTop: "1px solid #d9dfd6", paddingTop: 16 }}>
-          {resumeError && <p style={{ color: "#b3261e" }}>{resumeError}</p>}
-          <button type="button" onClick={handleResume} disabled={resuming}>
+        <div className="mt-6 border-t border-gray-200 pt-4">
+          {resumeError && <p className="mb-2 text-sm text-red-700">{resumeError}</p>}
+          <button
+            type="button"
+            onClick={handleResume}
+            disabled={resuming}
+            className="rounded bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60"
+          >
             {resuming ? "Resuming..." : "Confirm & Resume"}
           </button>
         </div>

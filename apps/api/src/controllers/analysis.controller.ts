@@ -41,27 +41,27 @@ export const analysisController = {
   // POST /api/meetings/:meetingId/analysis
   // Body: { scenario?: "success" | "partial-failure" | "timeout" | "malformed-output" }
   async start(req: AuthenticatedRequest, res: Response) {
-  try {
-    const useGraph = req.body?.useGraph === true;
+    try {
+      const useGraph = req.body?.useGraph === true;
 
-    if (useGraph) {
-      const { run, rawResult } = await analysisService.startGraphAnalysis(
+      if (useGraph) {
+        const { run, rawResult } = await analysisService.startGraphAnalysis(
+          req.userId!,
+          req.params.meetingId
+        );
+        return res.status(201).json({ ok: true, analysisRun: run, debugRawResult: rawResult });
+      }
+
+      const run = await analysisService.startAnalysis(
         req.userId!,
-        req.params.meetingId
+        req.params.meetingId,
+        req.body?.scenario
       );
-      return res.status(201).json({ ok: true, analysisRun: run, debugRawResult: rawResult });
+      res.status(201).json({ ok: true, analysisRun: run });
+    } catch (err) {
+      handleError(err, res);
     }
-
-    const run = await analysisService.startAnalysis(
-      req.userId!,
-      req.params.meetingId,
-      req.body?.scenario
-    );
-    res.status(201).json({ ok: true, analysisRun: run });
-  } catch (err) {
-    handleError(err, res);
-  }
-},
+  },
 
   // GET /api/meetings/:meetingId/analysis/:analysisRunId
   async getForMeeting(req: AuthenticatedRequest, res: Response) {
@@ -97,6 +97,20 @@ export const analysisController = {
     try {
       const run = await analysisService.getAnalysisRun(req.userId!, req.params.analysisRunId);
       res.status(200).json({ ok: true, analysisRun: run });
+    } catch (err) {
+      handleError(err, res);
+    }
+  },
+
+  // POST /api/meetings/:meetingId/analysis/:analysisRunId/retry
+  async retry(req: AuthenticatedRequest, res: Response) {
+    try {
+      const run = await analysisService.retryAnalysis(
+        req.userId!,
+        req.params.meetingId,
+        req.params.analysisRunId
+      );
+      res.status(201).json({ ok: true, analysisRun: run });
     } catch (err) {
       handleError(err, res);
     }

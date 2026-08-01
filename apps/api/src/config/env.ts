@@ -30,6 +30,7 @@ export type AppEnv = {
   OPENROUTER_BASE_URL: string;
   AI_REQUEST_TIMEOUT_MS: number;
   AI_MAX_RETRIES: number;
+  PROMPT_VERSION: string;
 };
 
 function required(name: string): string {
@@ -56,5 +57,6 @@ export function getEnv(): AppEnv {
     OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
     AI_REQUEST_TIMEOUT_MS: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 30000),
     AI_MAX_RETRIES: Number(process.env.AI_MAX_RETRIES ?? 1),
+    PROMPT_VERSION: process.env.PROMPT_VERSION ?? "meetingos-v1",
   };
 }

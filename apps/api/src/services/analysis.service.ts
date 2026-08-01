@@ -172,6 +172,35 @@ export class AnalysisService {
     return run;
   }
 
+  async retryAnalysis(ownerId: string, meetingId: string, analysisRunId: string) {
+    // Ownership + existence check for both the meeting and the run.
+    await meetingService.getMeeting(ownerId, meetingId);
+    if (!mongoose.isValidObjectId(analysisRunId)) {
+      throw new Error("Analysis run not found");
+    }
+    const failedRun = await analysisRunRepository.findByIdAndMeeting(analysisRunId, meetingId, ownerId);
+    if (!failedRun) {
+      throw new Error("Analysis run not found");
+    }
+    if (failedRun.status !== "FAILED" && failedRun.status !== "PARTIAL_FAILURE") {
+      throw new Error(`Cannot retry a run with status "${failedRun.status}"`);
+    }
+
+    logInfo("Retrying failed analysis run", {
+      meetingId,
+      previousAnalysisRunId: analysisRunId,
+      previousStatus: failedRun.status,
+    });
+
+    // Retry creates a FRESH run rather than resuming the failed run's
+    // checkpoint — a run that never reached human review (FAILED) or
+    // that failed a core node (PARTIAL_FAILURE) doesn't have a reliable
+    // paused state to resume from. The old run stays in the database as
+    // a historical record; this is a genuinely new attempt.
+    const { run: newRun } = await this.startGraphAnalysis(ownerId, meetingId);
+    return newRun;
+  }
+
   async startGraphAnalysis(ownerId: string, meetingId: string) {
   const meeting = await meetingService.getMeeting(ownerId, meetingId);
 

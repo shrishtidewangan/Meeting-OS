@@ -161,32 +161,150 @@ Use this file to record your implementation decisions, blockers, tests, and AI-a
 ### Day 4
 
 - What I implemented:
+  - Full ESLint flat config (typescript-eslint + React hooks/refresh
+    rules) — went from 5 packages with placeholder "TODO" lint scripts
+    to a real, passing lint run (0 errors, 27 documented `any` warnings)
+  - Supertest integration tests for auth (register/login/duplicate-
+    email/wrong-password) and meeting ownership (404 vs 403), plus a
+    committed test suite for @meetingos/validation's schemas (13 tests
+    covering boundary cases and the coreDraft-vs-finalRecord distinction)
+  - Expanded the Playwright e2e test from a simple login->dashboard
+    check into the full happy path: create meeting -> start analysis ->
+    edit a decision -> resume -> see generated follow-up content
+  - Closed several literal gaps found by re-reading the spec's exact
+    "Review workspace must let the user..." and "Required Screens"
+    lists word-for-word: made the Overview/summary editable, made the
+    follow-up email editable with a copy-to-clipboard button, made the
+    Next Agenda editable, implemented RunDetailsPage (previously an
+    unfilled stub) against the real metrics endpoint, and made
+    MeetingDetailsPage actually display the finalized follow-up
+    email/agenda once a meeting reaches FINALIZED
+  - Implemented the retry endpoint (creates a fresh analysis run for a
+    FAILED/PARTIAL_FAILURE run rather than trying to resume a broken
+    checkpoint), with a guard rejecting retries on non-failed runs
+  - Converted every frontend page to genuine Tailwind CSS utility
+    classes (previously only backend technologies were fully "required-
+    stack compliant"; Tailwind had been flagged early and left
+    unaddressed until this pass), and added real React Hook Form usage
+    to both AuthPage and NewMeetingPage
+  - Ran a live OpenRouter evaluation, found a real reliability problem
+    (no run completed all 4 core nodes across 3 attempts), fixed it by
+    raising AI_REQUEST_TIMEOUT_MS from 30000 to 60000, then re-ran the
+    evaluation and confirmed the fix (reasoning-model config reached
+    4/4 for the first time)
+  - Wrote docs/ARCHITECTURE.md, docs/AGENTS.md, and
+    docs/KNOWN_LIMITATIONS.md from scratch, and updated docs/API.md,
+    docs/DATA_MODEL.md, docs/TEST_RESULTS.md, and
+    docs/OPENROUTER_EVALUATION.md to reflect final, verified state
+
 - What blocked me:
-- What I tested:
+  - Several files silently reverted to earlier or original-stub content
+    partway through edits (AppShell.tsx, DashboardPage.tsx both
+    reverted to pre-Tailwind versions at least once each) — caught only
+    by re-pasting file contents and comparing against what was expected,
+    reinforcing the value of verifying rather than assuming a change
+    landed
+  - A Vitest/Vite version mismatch (vitest@2.1.8 pinned to an
+    incompatible Vite 5 while the project used Vite 6) produced a
+    confusing, deeply-nested TypeScript plugin-type error that had
+    nothing to do with the actual test code — resolved by upgrading to
+    vitest@^3
+  - The React Hook Form conversion and Playwright e2e expansion had to
+    be done together carefully, since changing form field markup (label
+    text, button names) broke existing test selectors that had been
+    written against the older manual-useState version of the same pages
 
-## Required Reflection
+- What tested:
+  - Full fresh run of the entire verification suite (pnpm typecheck,
+    lint, test, build, test:e2e) across all 5 workspace packages,
+    recorded verbatim in docs/TEST_RESULTS.md
+  - Every literal requirement from the spec's "Required Screens" and
+    "Review Workspace must let the user" lists was checked one item at
+    a time against actual running code (not assumed), which is what
+    surfaced the summary/follow-up/agenda editing gaps and the
+    RunDetailsPage stub in the first place
+  - Re-ran the full OpenRouter live evaluation after the timeout fix to
+    confirm it actually resolved the reliability problem, rather than
+    just asserting the fix should work
 
-1. What did you implement first, and why?
-- I implemented registration and login first, since every other endpoint in
-the system depends on having an authenticated user to scope data to.
-Meetings, transcripts, and analysis runs all need an ownerId, and
-ownership checks (returning 404/403 correctly) only make sense once
-there's a real user and a working JWT to verify.
+## Required Work Log Prompts
 
-Starting here also let me establish patterns I reused for the rest of
-the backend: bcrypt for password hashing, a consistent error-response
-shape, and a requireAuth middleware that every subsequent route
-(meetings, analysis) could just plug into rather than reimplementing
-auth logic per feature. Getting this foundation right first — including
-fixing early issues like the missing mongoose.connect() call and the
-JWT issuer mismatch — meant the meeting API and analysis API could be
-built and tested against a stable, working auth layer instead of
-debugging auth and business logic simultaneously.
+**1. What did you implement first, and why?**
+Registration and login. Every other endpoint depends on having an
+authenticated user to scope data to — meetings, transcripts, and
+analysis runs all need an ownerId, and ownership checks only make sense
+once there's a real user and working JWT to verify. Getting this
+foundation right first (bcrypt hashing, JWT signing/verification, a
+requireAuth middleware every later route could plug into) meant the
+meeting API and analysis pipeline could be built against a stable,
+already-tested auth layer instead of debugging both at once.
 
-2. Which part of the graph was hardest?
-3. Where did you use AI coding assistance?
-4. What AI-generated code or recommendation did you reject or correct?
-5. Which test gives the strongest evidence that the prototype works?
-6. What is the most serious current limitation?
-7. What would you build with two more days?
+**2. Which part of the graph was hardest?**
+The human-review interrupt/resume mechanism, specifically two things I
+couldn't have known without testing directly: (a) the exact runtime
+shape LangGraph returns when a graph pauses at interrupt() — I had to
+build a debug endpoint and inspect real output before trusting the
+__interrupt__/Command({resume}) pattern — and (b) a real architectural
+bug I introduced and caught myself: my first version of
+startGraphAnalysis created a brand-new graph instance (and thus a fresh,
+empty MemorySaver) on every request, which would have made resume
+permanently unable to find any paused checkpoint. Fixing this required
+switching to one shared, module-level graph instance for the whole
+server process.
+
+**3. Where did you use AI coding assistance?**
+Throughout the entire implementation — I used Claude to write nearly
+all of the code in this repository, working iteratively: I'd describe
+what I needed, Claude would ask to see existing stub files before
+writing real implementations (to match exact method signatures rather
+than guess), and I ran every command and pasted real output back for
+verification at each step, rather than accepting claims without
+evidence.
+
+**4. What AI-generated code or recommendation did you reject or correct?**
+Two concrete examples: First, an early OpenRouter evaluation draft
+claimed the reasoning-capable model had hallucinated an owner name
+("Jordan") on a blocker — I pushed back and asked for it to be verified
+against the actual fixture transcript, which showed Jordan was the
+literal speaker of that line, so the "hallucination" claim was wrong
+and had to be corrected in the documentation rather than left standing.
+Second, the initial ChatOpenRouter reasoning-effort configuration
+guessed at a `reasoning: { effort }` constructor field based on
+Python-package documentation, which turned out not to exist in the
+installed JS package's actual TypeScript types — I insisted on checking
+the real installed .d.ts file rather than continuing to guess, which
+led to the correct fix (`modelKwargs.reasoning.effort`).
+
+**5. Which test gives the strongest evidence that the prototype works?**
+The Playwright end-to-end test covering the full happy path (login ->
+create meeting -> start analysis -> edit a decision -> resume -> see
+generated follow-up content), because it exercises the real frontend,
+real backend, real MongoDB, and real JWT auth together with no mocking
+at any layer. It's also the test that caught a genuine production bug
+during development: the UI's "Run Analysis" button was calling the
+Day-1 fixture-only endpoint, which never created a real LangGraph
+checkpoint, so resume would have silently failed for every real user —
+this was only discovered because the e2e test actually clicked through
+the real UI rather than calling the API directly.
+
+**6. What is the most serious current limitation?**
+Live OpenRouter reliability under the default 30-second timeout: across
+the first three live evaluation runs, no run ever completed all four
+core extraction nodes successfully — at least one node timed out every
+time. Raising AI_REQUEST_TIMEOUT_MS to 60000ms substantially fixed this
+(the reasoning-model configuration reached 4/4 for the first time in
+Run 4), but openrouter/free's actionAgent still occasionally times out
+even at 60s. This means live mode is not yet reliably demo-ready without
+falling back to mock mode if a node happens to hit a slow provider.
+
+**7. What would you build with two more days?**
+Fix openrouter/free's remaining actionAgent reliability (likely a
+schema/prompt simplification, since it consistently produces the
+largest completion payloads of any core node); add a durable
+(MongoDB-backed) LangGraph checkpointer so paused analysis runs survive
+a server restart, since MemorySaver's in-memory-only nature is the
+single biggest gap between this prototype and something production-
+ready; and add a backend endpoint to actually persist Next Agenda and
+Follow-Up edits back to the meeting record, since those are currently
+local-only edits in the Review Workspace.
 

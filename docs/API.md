@@ -1,12 +1,5 @@
 # API Summary
 
-Document your implemented REST API here.
-
-Include:
-
-- Auth endpoints.
-# API Summary
-
 ## Error Envelope Shape
 
 All error responses follow this shape:
@@ -113,8 +106,7 @@ Error responses:
 - 401 AUTH_MISSING_TOKEN — no Authorization header, or not in "Bearer <token>" form
 - 401 AUTH_INVALID_TOKEN — token invalid, expired, or issuer mismatch
 
-
-- Meeting endpoints.
+## Meeting Endpoints
 
 All meeting endpoints require authentication:
   Authorization: Bearer <token>
@@ -222,25 +214,35 @@ Error responses:
 - 400 FILE_TOO_LARGE — uploaded file exceeds 200KB
 - 400 UPLOAD_FAILED — other upload error
 
-- Analysis endpoints.
-
 ## Analysis Endpoints
 
 All analysis endpoints require authentication:
   Authorization: Bearer <token>
 
-Currently implemented in **mock mode only** — these run against static
-fixture data (packages/test-fixtures/mock-results/), not a real LangGraph
-workflow or OpenRouter. Live analysis is a later step.
+Two modes are supported on the same start endpoint:
+- **Fixture mode** (default): loads a static, pre-written result from
+  packages/test-fixtures/mock-results/ — fast, deterministic, used for
+  the Day-1 "one complete mock result" demonstration.
+- **Real graph mode** (`useGraph: true`): actually invokes the full
+  LangGraph pipeline (six agent nodes, parallel core extraction, human-
+  review interrupt) using MockMeetingModelClient (AI_MODE=mock, no real
+  API calls) or a live model client if manually configured. This is
+  what the frontend's "Run Analysis" button actually calls.
 
 ### POST /api/meetings/:meetingId/analysis
-Starts a mock analysis run for an owned meeting.
+Starts an analysis run for an owned meeting.
 
 Request body (optional):
 { "scenario": "success" }
+  — OR —
+{ "useGraph": true }
 
-scenario must be one of: success, partial-failure, timeout, malformed-output
-Defaults to the MOCK_AI_SCENARIO env var (default "success") if omitted.
+scenario (fixture mode) must be one of: success, partial-failure,
+timeout, malformed-output. Defaults to the MOCK_AI_SCENARIO env var
+(default "success") if omitted and useGraph is not set.
+
+useGraph: true runs the real LangGraph pipeline instead of loading a
+fixture — this is the mode the actual UI uses.
 
 Success response (201):
 {
@@ -255,6 +257,7 @@ Success response (201):
     "actualModel": "mock",
     "warnings": [],
     "sanitizedErrors": [],
+    "agentRuns": [ { "nodeName": "summaryAgent", "status": "SUCCEEDED", "durationMs": 0, "requestedModel": "mock", "actualModel": "mock", "retryCount": 0 } ],
     "retryCount": 0,
     "result": {
       "analysisRunId": "...",
@@ -275,11 +278,16 @@ Success response (201):
   }
 }
 
-Scenario -> resulting status:
+Scenario -> resulting status (fixture mode):
   success           -> NEEDS_REVIEW
   partial-failure   -> PARTIAL_FAILURE
   malformed-output   -> PARTIAL_FAILURE
   timeout           -> FAILED
+
+In real graph mode (useGraph: true), status is NEEDS_REVIEW if the
+graph reached the human-review interrupt (even with some core nodes
+failed — see Failure Handling), or FAILED if the graph did not reach
+the interrupt at all (e.g. even the Summary Agent failed).
 
 The meeting's own `status` and `latestGeneratedDraft` are updated to match.
 
@@ -304,6 +312,7 @@ convenience route. Scoped to the owner only.
 Success response (200):
 { "ok": true, "analysisRun": { ... } }
 
+Error responses: same as above.
 
 ## Resume And Retry Endpoints
 
@@ -315,6 +324,7 @@ authentication and ownership of both the meeting and the run.
 Request body:
 {
   "reviewedRecord": {
+    "summary": { "executiveSummary": "...", "themes": [...], "outcome": "CLEAR_OUTCOME" },
     "decisions": [ /* array of Decision, possibly edited/added/removed by the user */ ],
     "actionItems": [ /* array of ActionItem, possibly edited/added/removed */ ],
     "risksAndBlockers": [ /* array of RiskOrBlocker, possibly edited */ ],
@@ -367,14 +377,31 @@ Error responses:
   reviewedRecord failed schema validation
 
 ### POST /api/meetings/:meetingId/analysis/:analysisRunId/retry
-Not yet implemented. Currently returns 501:
+Creates a fresh analysis run for a meeting whose previous run FAILED or
+PARTIAL_FAILURE'd, rather than attempting to resume the broken run's
+checkpoint (a run that never reached human review has no reliable
+paused state to resume from). The original failed run is preserved as
+a historical record, not deleted or modified.
+
+Preconditions:
+- The target run must currently have status FAILED or PARTIAL_FAILURE.
+  Retrying a run in any other status (e.g. NEEDS_REVIEW, FINALIZED)
+  returns 400.
+
+Success response (201):
 {
-  "ok": false,
-  "error": {
-    "code": "NOT_IMPLEMENTED",
-    "message": "Meeting TODO: retry analysis"
+  "ok": true,
+  "analysisRun": {
+    "_id": "...",   /* a NEW, different id from the retried run */
+    "status": "NEEDS_REVIEW",
+    ...
   }
 }
+
+Error responses:
+- 404 ANALYSIS_NOT_FOUND — meeting or run doesn't exist
+- 403 ANALYSIS_FORBIDDEN — meeting/run belongs to another user
+- 400 ANALYSIS_REQUEST_INVALID — run status doesn't allow retry
 
 ## Metrics Endpoints
 
@@ -420,11 +447,3 @@ Notes:
 
 Error responses:
 - 401 AUTH_MISSING_TOKEN / AUTH_INVALID_TOKEN — same as any protected route
-
-
-
-- Request and response examples.
-- Error envelope shape.
-
-TODO: replace this scaffold with your API documentation.
-

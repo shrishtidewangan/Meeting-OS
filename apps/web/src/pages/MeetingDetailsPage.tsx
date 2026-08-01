@@ -1,22 +1,7 @@
-// export function MeetingDetailsPage() {
-//   return (
-//     <section className="panel">
-//       <h1>Meeting Details Shell</h1>
-//       <p className="muted">TODO: display the finalized meeting record, copy actions, metadata, and delete confirmation.</p>
-//       <ul className="todo-list">
-//         <li>Reviewed record.</li>
-//         <li>Follow-up email.</li>
-//         <li>Next-meeting agenda.</li>
-//         <li>Analysis metadata.</li>
-//       </ul>
-//     </section>
-//   );
-// }
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getMeeting, type Meeting } from "../services/meetingApi";
-import { startAnalysis, type MockScenario } from "../services/analysisApi";
+import { startAnalysis } from "../services/analysisApi";
 
 export function MeetingDetailsPage() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -25,7 +10,6 @@ export function MeetingDetailsPage() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scenario, setScenario] = useState<MockScenario>("success");
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -41,8 +25,11 @@ export function MeetingDetailsPage() {
     setError(null);
     setStarting(true);
     try {
-      const run = await startAnalysis(meetingId, scenario);
-      navigate(`/meetings/${meetingId}/review?runId=${run._id}`);
+      const run = await startAnalysis(meetingId);
+      // Go through the Analysis Progress page first, not straight to
+      // Review — this page shows per-node status and has its own
+      // "Go to Review Workspace" button once the run reaches NEEDS_REVIEW.
+      navigate(`/meetings/${meetingId}/analysis?runId=${run._id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start analysis");
     } finally {
@@ -52,84 +39,95 @@ export function MeetingDetailsPage() {
 
   if (loading) {
     return (
-      <section className="panel">
-        <p className="muted">Loading meeting...</p>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <p className="text-sm text-gray-600">Loading meeting...</p>
       </section>
     );
   }
 
   if (error && !meeting) {
     return (
-      <section className="panel">
-        <h1>Meeting Details</h1>
-        <p style={{ color: "#b3261e" }}>{error}</p>
-        <Link to="/dashboard">Back to dashboard</Link>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h1 className="text-xl font-bold">Meeting Details</h1>
+        <p className="text-sm text-red-700">{error}</p>
+        <Link to="/dashboard" className="font-semibold text-teal-800 hover:underline">
+          Back to dashboard
+        </Link>
       </section>
     );
   }
 
   if (!meeting) return null;
 
+  const isFinalized = meeting.status === "FINALIZED";
+
   return (
-    <section className="panel">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 style={{ marginBottom: 4 }}>{meeting.title}</h1>
-          <p className="muted" style={{ margin: 0 }}>
+          <h1 className="mb-1 text-xl font-bold">{meeting.title}</h1>
+          <p className="m-0 text-sm text-gray-600">
             {meeting.meetingType.replace("_", " ")} &middot;{" "}
             {new Date(meeting.meetingDate).toLocaleDateString()} &middot; Status: {meeting.status}
           </p>
         </div>
-        <Link to="/dashboard">Back to dashboard</Link>
+        <Link to="/dashboard" className="font-semibold text-teal-800 hover:underline">
+          Back to dashboard
+        </Link>
       </div>
 
       {meeting.participants.length > 0 && (
-        <p style={{ marginTop: 16 }}>
+        <p className="mt-4 text-sm">
           <strong>Participants:</strong> {meeting.participants.map((p) => p.name).join(", ")}
         </p>
       )}
 
-      <div style={{ marginTop: 16 }}>
-        <strong>Transcript</strong>
-        <p
-          className="muted"
-          style={{
-            maxHeight: 160,
-            overflowY: "auto",
-            whiteSpace: "pre-wrap",
-            border: "1px solid #d9dfd6",
-            borderRadius: 6,
-            padding: 12,
-            marginTop: 6,
-          }}
-        >
+      <div className="mt-4">
+        <strong className="text-sm">Transcript</strong>
+        <p className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-gray-200 p-3 text-sm text-gray-600">
           {meeting.transcript}
         </p>
       </div>
 
-      <div style={{ marginTop: 24, borderTop: "1px solid #d9dfd6", paddingTop: 20 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>Run Analysis (Mock)</h2>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Live OpenRouter analysis isn't implemented yet — this runs against a
-          fixed mock scenario so the review workspace can be built and tested first.
-        </p>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <select
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value as MockScenario)}
-            style={{ padding: 8 }}
-          >
-            <option value="success">Success</option>
-            <option value="partial-failure">Partial failure</option>
-            <option value="timeout">Timeout</option>
-            <option value="malformed-output">Malformed output</option>
-          </select>
-          <button type="button" onClick={handleRunAnalysis} disabled={starting}>
-            {starting ? "Starting..." : "Run Mock Analysis"}
-          </button>
+      {isFinalized && meeting.followUpEmail && (
+        <div className="mt-6 rounded border border-green-200 bg-green-50 p-4">
+          <h2 className="mb-2 text-base font-semibold">Follow-Up Email</h2>
+          <p className="text-sm">
+            <strong>Subject:</strong> {meeting.followUpEmail.subject}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm">
+            {meeting.followUpEmail.body}
+          </p>
         </div>
-        {error && <p style={{ color: "#b3261e", marginTop: 8 }}>{error}</p>}
-      </div>
+      )}
+
+      {isFinalized && meeting.nextAgenda && (
+        <div className="mt-4 rounded border border-blue-200 bg-blue-50 p-4">
+          <h2 className="mb-2 text-base font-semibold">Next Meeting Agenda</h2>
+          <p className="text-sm font-semibold">{meeting.nextAgenda.title}</p>
+          <p className="text-sm text-gray-600">
+            Suggested duration: {meeting.nextAgenda.suggestedDurationMinutes} minutes
+          </p>
+        </div>
+      )}
+
+      {!isFinalized && (
+        <div className="mt-6 border-t border-gray-200 pt-5">
+          <h2 className="mb-1 text-base font-semibold">Run Analysis</h2>
+          <p className="mb-3 text-xs text-gray-600">
+            Starts the LangGraph analysis pipeline (mock mode) for this meeting.
+          </p>
+          <button
+            type="button"
+            onClick={handleRunAnalysis}
+            disabled={starting}
+            className="rounded bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60"
+          >
+            {starting ? "Starting..." : "Run Analysis"}
+          </button>
+          {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+        </div>
+      )}
     </section>
   );
 }

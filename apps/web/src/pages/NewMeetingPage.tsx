@@ -1,41 +1,49 @@
-// export function NewMeetingPage() {
-//   return (
-//     <section className="panel">
-//       <h1>New Meeting Shell</h1>
-//       <p className="muted">TODO: implement metadata form, transcript paste/upload, validation, and analysis start.</p>
-//       <ul className="todo-list">
-//         <li>Title, date, meeting type, participants, context.</li>
-//         <li>Transcript or notes from paste, txt, or md upload.</li>
-//         <li>Character count and validation messages.</li>
-//         <li>Analyze Meeting action.</li>
-//       </ul>
-//     </section>
-//   );
-// }
-
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { createMeeting } from "../services/meetingApi";
 import type { MeetingType } from "@meetingos/contracts";
 
 const MIN_TRANSCRIPT = 200;
 const MAX_TRANSCRIPT = 60000;
 
+type FormValues = {
+  title: string;
+  meetingType: MeetingType;
+  meetingDate: string;
+  participantsInput: string;
+  projectOrAccountName: string;
+  context: string;
+  desiredOutcome: string;
+  transcript: string;
+};
+
 export function NewMeetingPage() {
   const navigate = useNavigate();
-
-  const [title, setTitle] = useState("");
-  const [meetingType, setMeetingType] = useState<MeetingType>("PROJECT");
-  const [meetingDate, setMeetingDate] = useState("");
-  const [participantsInput, setParticipantsInput] = useState("");
-  const [projectOrAccountName, setProjectOrAccountName] = useState("");
-  const [context, setContext] = useState("");
-  const [desiredOutcome, setDesiredOutcome] = useState("");
-  const [transcript, setTranscript] = useState("");
   const [inputMode, setInputMode] = useState<"paste" | "upload">("paste");
   const [fileError, setFileError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    defaultValues: {
+      title: "",
+      meetingType: "PROJECT",
+      meetingDate: "",
+      participantsInput: "",
+      projectOrAccountName: "",
+      context: "",
+      desiredOutcome: "",
+      transcript: "",
+    },
+  });
+
+  const transcript = watch("transcript");
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setFileError(null);
@@ -51,7 +59,7 @@ export function NewMeetingPage() {
 
     const reader = new FileReader();
     reader.onload = () => {
-      setTranscript(String(reader.result ?? ""));
+      setValue("transcript", String(reader.result ?? ""), { shouldValidate: true });
     };
     reader.onerror = () => {
       setFileError("Could not read that file.");
@@ -59,97 +67,74 @@ export function NewMeetingPage() {
     reader.readAsText(file);
   }
 
-  function validate(): string | null {
-    if (title.trim().length < 3 || title.trim().length > 120) {
-      return "Title must be between 3 and 120 characters.";
-    }
-    if (!meetingDate) {
-      return "Meeting date is required.";
-    }
-    if (transcript.length < MIN_TRANSCRIPT) {
-      return `Transcript too short (minimum ${MIN_TRANSCRIPT} characters, currently ${transcript.length}).`;
-    }
-    if (transcript.length > MAX_TRANSCRIPT) {
-      return `Transcript too long (maximum ${MAX_TRANSCRIPT} characters, currently ${transcript.length}).`;
-    }
-    return null;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(values: FormValues) {
     setFormError(null);
 
-    const validationError = validate();
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
-
-    const participants = participantsInput
+    const participants = values.participantsInput
       .split(",")
       .map((name) => name.trim())
       .filter(Boolean)
       .map((name) => ({ name }));
 
-    setSubmitting(true);
     try {
       const meeting = await createMeeting({
-        title: title.trim(),
-        meetingType,
-        meetingDate,
-        transcript,
+        title: values.title.trim(),
+        meetingType: values.meetingType,
+        meetingDate: values.meetingDate,
+        transcript: values.transcript,
         participants: participants.length > 0 ? participants : undefined,
-        projectOrAccountName: projectOrAccountName.trim() || undefined,
-        context: context.trim() || undefined,
-        desiredOutcome: desiredOutcome.trim() || undefined,
+        projectOrAccountName: values.projectOrAccountName.trim() || undefined,
+        context: values.context.trim() || undefined,
+        desiredOutcome: values.desiredOutcome.trim() || undefined,
       });
       navigate(`/meetings/${meeting._id}`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create meeting");
-    } finally {
-      setSubmitting(false);
     }
   }
 
   const charCountColor =
     transcript.length > 0 && (transcript.length < MIN_TRANSCRIPT || transcript.length > MAX_TRANSCRIPT)
-      ? "#b3261e"
-      : "#5e6860";
+      ? "text-red-700"
+      : "text-gray-600";
 
   return (
-    <section className="panel">
-      <h1>New Meeting</h1>
+    <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <h1 className="mb-4 text-xl font-bold">New Meeting</h1>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 560 }}>
-        <label>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex max-w-xl flex-col gap-4">
+        <label className="text-sm font-medium">
           Title
           <input
             type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            {...register("title", {
+              required: "Title is required",
+              minLength: { value: 3, message: "Title must be at least 3 characters" },
+              maxLength: { value: 120, message: "Title must be at most 120 characters" },
+            })}
+            className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
+          {errors.title && <p className="mt-1 text-xs text-red-700">{errors.title.message}</p>}
         </label>
 
-        <div style={{ display: "flex", gap: 16 }}>
-          <label style={{ flex: 1 }}>
+        <div className="flex gap-4">
+          <label className="flex-1 text-sm font-medium">
             Meeting date
             <input
               type="date"
-              value={meetingDate}
-              onChange={(e) => setMeetingDate(e.target.value)}
-              required
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              {...register("meetingDate", { required: "Meeting date is required" })}
+              className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
             />
+            {errors.meetingDate && (
+              <p className="mt-1 text-xs text-red-700">{errors.meetingDate.message}</p>
+            )}
           </label>
 
-          <label style={{ flex: 1 }}>
+          <label className="flex-1 text-sm font-medium">
             Meeting type
             <select
-              value={meetingType}
-              onChange={(e) => setMeetingType(e.target.value as MeetingType)}
-              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+              {...register("meetingType")}
+              className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
             >
               <option value="PROJECT">Project meeting</option>
               <option value="CUSTOMER_INTERVIEW">Customer interview</option>
@@ -159,107 +144,114 @@ export function NewMeetingPage() {
           </label>
         </div>
 
-        <label>
-          Participants <span className="muted">(comma-separated, optional)</span>
+        <label className="text-sm font-medium">
+          Participants <span className="font-normal text-gray-500">(comma-separated, optional)</span>
           <input
             type="text"
-            value={participantsInput}
-            onChange={(e) => setParticipantsInput(e.target.value)}
+            {...register("participantsInput")}
             placeholder="Ana, Ben, Chris"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
         </label>
 
-        <label>
-          Project or account name <span className="muted">(optional)</span>
+        <label className="text-sm font-medium">
+          Project or account name <span className="font-normal text-gray-500">(optional)</span>
           <input
             type="text"
-            value={projectOrAccountName}
-            onChange={(e) => setProjectOrAccountName(e.target.value)}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            {...register("projectOrAccountName")}
+            className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
         </label>
 
-        <label>
-          Context <span className="muted">(optional)</span>
+        <label className="text-sm font-medium">
+          Context <span className="font-normal text-gray-500">(optional)</span>
           <textarea
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
+            {...register("context")}
             rows={2}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
         </label>
 
-        <label>
-          Desired outcome <span className="muted">(optional)</span>
+        <label className="text-sm font-medium">
+          Desired outcome <span className="font-normal text-gray-500">(optional)</span>
           <textarea
-            value={desiredOutcome}
-            onChange={(e) => setDesiredOutcome(e.target.value)}
+            {...register("desiredOutcome")}
             rows={2}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
         </label>
 
         <div>
-          <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
-            <label>
+          <div className="mb-2 flex gap-4 text-sm">
+            <label className="flex items-center gap-1">
               <input
                 type="radio"
                 checked={inputMode === "paste"}
                 onChange={() => setInputMode("paste")}
-              />{" "}
+              />
               Paste transcript
             </label>
-            <label>
+            <label className="flex items-center gap-1">
               <input
                 type="radio"
                 checked={inputMode === "upload"}
                 onChange={() => setInputMode("upload")}
-              />{" "}
+              />
               Upload .txt or .md
             </label>
           </div>
 
           {inputMode === "paste" ? (
             <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
+              {...register("transcript", {
+                required: "Transcript is required",
+                minLength: { value: MIN_TRANSCRIPT, message: `Transcript too short (minimum ${MIN_TRANSCRIPT} characters)` },
+                maxLength: { value: MAX_TRANSCRIPT, message: `Transcript too long (maximum ${MAX_TRANSCRIPT} characters)` },
+              })}
               rows={10}
               placeholder="Paste the meeting transcript or notes here..."
-              style={{ display: "block", width: "100%", padding: 8 }}
+              className="block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
             />
           ) : (
             <div>
-              <input type="file" accept=".txt,.md" onChange={handleFileChange} />
-              {fileError && <p style={{ color: "#b3261e", marginTop: 4 }}>{fileError}</p>}
+              <input type="file" accept=".txt,.md" onChange={handleFileChange} className="text-sm" />
+              {fileError && <p className="mt-1 text-xs text-red-700">{fileError}</p>}
               {transcript && (
                 <textarea
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
+                  {...register("transcript", {
+                    required: "Transcript is required",
+                    minLength: { value: MIN_TRANSCRIPT, message: `Transcript too short (minimum ${MIN_TRANSCRIPT} characters)` },
+                    maxLength: { value: MAX_TRANSCRIPT, message: `Transcript too long (maximum ${MAX_TRANSCRIPT} characters)` },
+                  })}
                   rows={10}
-                  style={{ display: "block", width: "100%", padding: 8, marginTop: 8 }}
+                  className="mt-2 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
                 />
               )}
             </div>
           )}
 
-          <p style={{ color: charCountColor, fontSize: 13, marginTop: 4 }}>
+          {errors.transcript && (
+            <p className="mt-1 text-xs text-red-700">{errors.transcript.message}</p>
+          )}
+
+          <p className={`mt-1 text-xs ${charCountColor}`}>
             {transcript.length.toLocaleString()} / {MAX_TRANSCRIPT.toLocaleString()} characters
-            {transcript.length > 0 && transcript.length < MIN_TRANSCRIPT
-              ? ` (minimum ${MIN_TRANSCRIPT})`
-              : ""}
+            {transcript.length > 0 && transcript.length < MIN_TRANSCRIPT ? ` (minimum ${MIN_TRANSCRIPT})` : ""}
           </p>
         </div>
 
-        {formError && <p style={{ color: "#b3261e" }}>{formError}</p>}
+        {formError && <p className="text-sm text-red-700">{formError}</p>}
 
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Creating..." : "Create Meeting"}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60"
+        >
+          {isSubmitting ? "Creating..." : "Create Meeting"}
         </button>
 
-        <p className="muted" style={{ fontSize: 13 }}>
-          Note: this creates the meeting record. Starting the AI analysis is implemented
-          in a later step.
+        <p className="text-xs text-gray-500">
+          Note: this creates the meeting record and starts the LangGraph analysis automatically.
         </p>
       </form>
     </section>

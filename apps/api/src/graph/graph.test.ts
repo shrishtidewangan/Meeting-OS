@@ -41,6 +41,44 @@ describe("meeting graph", () => {
     }
   });
 
+  it("preserves successful sibling outputs when one core node fails", async () => {
+    // A custom client that fails specifically for actionAgent, succeeds
+    // for everything else — simulates exactly what we observed with real
+    // OpenRouter calls (actionAgent timing out while others succeeded).
+    const baseMockClient = new MockMeetingModelClient();
+    const partiallyFailingClient = {
+      async generateStructured<T>(input: any) {
+        if (input.nodeName === "actionAgent") {
+          throw new Error("Simulated timeout for actionAgent");
+        }
+        return baseMockClient.generateStructured<T>(input);
+      },
+    };
+
+    const graph = createMeetingGraph(partiallyFailingClient);
+    const threadId = `thread-${Date.now()}-d`;
+    const config = { configurable: { thread_id: threadId } };
+
+    const result: any = await graph.invoke(buildInitialState({ threadId }), config);
+
+    expect(result.__interrupt__).toBeTruthy();
+    expect(result.coreDraft).toBeTruthy();
+
+    expect(result.coreDraft.actionItems).toEqual([]);
+    expect(result.coreDraft.summary).toBeTruthy();
+    expect(result.coreDraft.decisions.length).toBeGreaterThan(0);
+    expect(result.coreDraft.risksAndBlockers.length).toBeGreaterThan(0);
+
+    const actionWarning = result.warnings.find((w: any) => w.nodeName === "actionAgent");
+    expect(actionWarning).toBeTruthy();
+    expect(actionWarning.code).toBe("ACTION_AGENT_FAILED");
+
+    const actionRun = result.agentRuns.find((r: any) => r.nodeName === "actionAgent");
+    expect(actionRun.status).toBe("FAILED");
+    const otherRuns = result.agentRuns.filter((r: any) => r.nodeName !== "actionAgent");
+    expect(otherRuns.every((r: any) => r.status === "SUCCEEDED")).toBe(true);
+  });
+
   it("rejects a transcript that is too short before running any agent", async () => {
     const graph = createMeetingGraph(new MockMeetingModelClient());
     const threadId = `thread-${Date.now()}-b`;
