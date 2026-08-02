@@ -16,14 +16,18 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { registerUser, loginUser } from "../services/authApi";
 import { getToken } from "../services/apiClient";
 
-type FormValues = {
-  name: string;
-  email: string;
-  password: string;
-};
+const authFormSchema = z.object({
+  name: z.string().optional(),
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+type FormValues = z.infer<typeof authFormSchema>;
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -35,10 +39,10 @@ export function AuthPage() {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>();
+  } = useForm<FormValues>({
+    resolver: zodResolver(authFormSchema),
+  });
 
-  // If already logged in, there's no reason to see the sign-in form again —
-  // send them straight to their dashboard.
   useEffect(() => {
     if (getToken()) {
       navigate("/dashboard");
@@ -47,9 +51,13 @@ export function AuthPage() {
 
   async function onSubmit(values: FormValues) {
     setError(null);
+    if (mode === "register" && !values.name) {
+      setError("Name is required");
+      return;
+    }
     try {
       if (mode === "register") {
-        await registerUser(values.name, values.email, values.password);
+        await registerUser(values.name!, values.email, values.password);
       } else {
         await loginUser(values.email, values.password);
       }
@@ -69,7 +77,7 @@ export function AuthPage() {
             Name
             <input
               type="text"
-              {...register("name", { required: mode === "register" ? "Name is required" : false })}
+              {...register("name")}
               className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
             />
             {errors.name && <p className="mt-1 text-xs text-red-700">{errors.name.message}</p>}
@@ -80,10 +88,7 @@ export function AuthPage() {
           Email
           <input
             type="email"
-            {...register("email", {
-              required: "Email is required",
-              pattern: { value: /^\S+@\S+\.\S+$/, message: "Invalid email address" },
-            })}
+            {...register("email")}
             className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
           {errors.email && <p className="mt-1 text-xs text-red-700">{errors.email.message}</p>}
@@ -93,10 +98,7 @@ export function AuthPage() {
           Password
           <input
             type="password"
-            {...register("password", {
-              required: "Password is required",
-              minLength: { value: 8, message: "Password must be at least 8 characters" },
-            })}
+            {...register("password")}
             className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
           {errors.password && <p className="mt-1 text-xs text-red-700">{errors.password.message}</p>}

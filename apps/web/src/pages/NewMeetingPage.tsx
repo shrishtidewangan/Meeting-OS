@@ -1,22 +1,28 @@
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useState } from "react";
 import { createMeeting } from "../services/meetingApi";
-import type { MeetingType } from "@meetingos/contracts";
 
 const MIN_TRANSCRIPT = 200;
 const MAX_TRANSCRIPT = 60000;
 
-type FormValues = {
-  title: string;
-  meetingType: MeetingType;
-  meetingDate: string;
-  participantsInput: string;
-  projectOrAccountName: string;
-  context: string;
-  desiredOutcome: string;
-  transcript: string;
-};
+const newMeetingFormSchema = z.object({
+  title: z.string().min(3, "Title must be at least 3 characters").max(120, "Title must be at most 120 characters"),
+  meetingType: z.enum(["PROJECT", "CUSTOMER_INTERVIEW", "SALES_CALL", "TEAM_STANDUP"]),
+  meetingDate: z.string().min(1, "Meeting date is required"),
+  participantsInput: z.string(),
+  projectOrAccountName: z.string(),
+  context: z.string(),
+  desiredOutcome: z.string(),
+  transcript: z
+    .string()
+    .min(MIN_TRANSCRIPT, `Transcript too short (minimum ${MIN_TRANSCRIPT} characters)`)
+    .max(MAX_TRANSCRIPT, `Transcript too long (maximum ${MAX_TRANSCRIPT} characters)`),
+});
+
+type FormValues = z.infer<typeof newMeetingFormSchema>;
 
 export function NewMeetingPage() {
   const navigate = useNavigate();
@@ -31,6 +37,7 @@ export function NewMeetingPage() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
+    resolver: zodResolver(newMeetingFormSchema),
     defaultValues: {
       title: "",
       meetingType: "PROJECT",
@@ -107,11 +114,7 @@ export function NewMeetingPage() {
           Title
           <input
             type="text"
-            {...register("title", {
-              required: "Title is required",
-              minLength: { value: 3, message: "Title must be at least 3 characters" },
-              maxLength: { value: 120, message: "Title must be at most 120 characters" },
-            })}
+            {...register("title")}
             className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
           />
           {errors.title && <p className="mt-1 text-xs text-red-700">{errors.title.message}</p>}
@@ -122,7 +125,7 @@ export function NewMeetingPage() {
             Meeting date
             <input
               type="date"
-              {...register("meetingDate", { required: "Meeting date is required" })}
+              {...register("meetingDate")}
               className="mt-1 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
             />
             {errors.meetingDate && (
@@ -203,11 +206,7 @@ export function NewMeetingPage() {
 
           {inputMode === "paste" ? (
             <textarea
-              {...register("transcript", {
-                required: "Transcript is required",
-                minLength: { value: MIN_TRANSCRIPT, message: `Transcript too short (minimum ${MIN_TRANSCRIPT} characters)` },
-                maxLength: { value: MAX_TRANSCRIPT, message: `Transcript too long (maximum ${MAX_TRANSCRIPT} characters)` },
-              })}
+              {...register("transcript")}
               rows={10}
               placeholder="Paste the meeting transcript or notes here..."
               className="block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
@@ -218,11 +217,7 @@ export function NewMeetingPage() {
               {fileError && <p className="mt-1 text-xs text-red-700">{fileError}</p>}
               {transcript && (
                 <textarea
-                  {...register("transcript", {
-                    required: "Transcript is required",
-                    minLength: { value: MIN_TRANSCRIPT, message: `Transcript too short (minimum ${MIN_TRANSCRIPT} characters)` },
-                    maxLength: { value: MAX_TRANSCRIPT, message: `Transcript too long (maximum ${MAX_TRANSCRIPT} characters)` },
-                  })}
+                  {...register("transcript")}
                   rows={10}
                   className="mt-2 block w-full rounded border border-gray-300 p-2 text-sm focus:border-teal-700 focus:outline-none"
                 />
