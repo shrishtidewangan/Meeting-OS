@@ -35,6 +35,14 @@ across all 7 tabs, editable fields shown mid-edit -> Confirm & Resume
 dashboard reflecting the finalized record. See attached screenshots
 for the full sequence. Video walkthrough: [https://www.loom.com/share/7fe4b0e2319f406d8d66fd5ca6357066].
 
+Hey! Here's a live link to test the MeetingOS prototype:
+
+https://pray-criterion-slowly-continuing.trycloudflare.com
+
+A few things to know before you dive in:
+
+It's temporary — this link is running off my own computer right now, so it'll only work while I'm actively running it. If it stops loading, ping me and I'll get it back up.
+
 ## LangGraph
 
 **State shape:** `MeetingGraphState`, defined via LangGraph's
